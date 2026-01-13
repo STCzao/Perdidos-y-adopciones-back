@@ -34,7 +34,7 @@ class Server {
         origin: [
           "http://localhost:5173",
           "http://localhost:3000",
-          "https://perdidosyadopciones.vercel.app", // dominio de vercel
+          "https://perdidosyadopciones.com.ar", // dominio de vercel
           "https://www.perdidosyadopciones.com.ar", // dominio original
         ],
         credentials: true,
