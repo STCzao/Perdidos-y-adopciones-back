@@ -10,56 +10,47 @@ const normalizarTexto = (texto) => {
 // Obtener publicaciones públicas (todas excepto INACTIVO)
 const publicacionesGet = async (req, res = response) => {
   try {
-    const { tipo, estado, search, page = 1, limit = 12 } = req.query;
+    const { page = 1, limit = 12, tipo, estado, search } = req.query;
 
-    const pageNumber = Number(page);
-    const limitNumber = Number(limit);
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+    const skip = (pageNum - 1) * limitNum;
 
-    // Query base: excluir INACTIVO
-    const query = { estado: { $ne: "INACTIVO" } };
+    const query = {
+      estado: { $ne: "INACTIVO" },
+    };
 
     if (tipo) {
       query.tipo = normalizarTexto(tipo);
     }
 
     if (estado) {
-      const estadoNormalizado = normalizarTexto(estado);
-      if (estadoNormalizado !== "INACTIVO") {
-        query.estado = estadoNormalizado;
-      }
+      query.estado = normalizarTexto(estado);
     }
 
     if (search) {
-      const regex = new RegExp(search, "i");
       query.$or = [
-        { nombreanimal: regex },
-        { especie: regex },
-        { raza: regex },
-        { color: regex },
-        { detalles: regex },
-        { edad: regex },
-        { lugar: regex },
-        { tamaño: regex },
+        { raza: { $regex: search, $options: "i" } },
+        { lugar: { $regex: search, $options: "i" } },
+        { detalles: { $regex: search, $options: "i" } },
       ];
     }
-
-    const skip = (pageNumber - 1) * limitNumber;
 
     const [total, publicaciones] = await Promise.all([
       Publicacion.countDocuments(query),
       Publicacion.find(query)
         .populate("usuario", "nombre")
-        .sort({ fechaCreacion: -1 })
+        .sort({ fecha: -1 })
         .skip(skip)
-        .limit(limitNumber),
+        .limit(limitNum),
     ]);
 
     res.json({
       success: true,
-      total,
-      totalPages: Math.ceil(total / limitNumber),
-      currentPage: pageNumber,
       publicaciones,
+      total,
+      page: pageNum,
+      totalPages: Math.ceil(total / limitNum),
     });
   } catch (error) {
     console.error(error);
