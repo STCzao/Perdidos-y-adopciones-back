@@ -10,26 +10,25 @@ const normalizarTexto = (texto) => {
 // Obtener publicaciones públicas (todas excepto INACTIVO)
 const publicacionesGet = async (req, res = response) => {
   try {
-    const { tipo, estado, search } = req.query;
+    const { tipo, estado, search, page = 1, limit = 12 } = req.query;
 
-    // Query base: excluir SOLO INACTIVO - incluir ACTIVO, ENCONTRADO, VISTO, ADOPTADO
+    const pageNumber = Number(page);
+    const limitNumber = Number(limit);
+
+    // Query base: excluir INACTIVO
     const query = { estado: { $ne: "INACTIVO" } };
 
-    // Filtro por tipo
     if (tipo) {
       query.tipo = normalizarTexto(tipo);
     }
 
-    // Filtro por estado específico (si se proporciona)
     if (estado) {
       const estadoNormalizado = normalizarTexto(estado);
-      // Solo aplicar filtro si no es INACTIVO
       if (estadoNormalizado !== "INACTIVO") {
         query.estado = estadoNormalizado;
       }
     }
 
-    // Búsqueda por texto en múltiples campos
     if (search) {
       const regex = new RegExp(search, "i");
       query.$or = [
@@ -44,18 +43,22 @@ const publicacionesGet = async (req, res = response) => {
       ];
     }
 
-    console.log("Query ejecutado:", query);
+    const skip = (pageNumber - 1) * limitNumber;
 
     const [total, publicaciones] = await Promise.all([
       Publicacion.countDocuments(query),
       Publicacion.find(query)
         .populate("usuario", "nombre")
-        .sort({ fechaCreacion: -1 }),
+        .sort({ fechaCreacion: -1 })
+        .skip(skip)
+        .limit(limitNumber),
     ]);
 
     res.json({
       success: true,
       total,
+      totalPages: Math.ceil(total / limitNumber),
+      currentPage: pageNumber,
       publicaciones,
     });
   } catch (error) {
