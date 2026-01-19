@@ -24,20 +24,20 @@ router.get("/", publicacionesGet);
 router.get(
   "/:id",
   [check("id", "No es un ID válido").isMongoId(), validarCampos],
-  publicacionGet
+  publicacionGet,
 );
 
 // Protegidas - Requieren autenticación
 router.get(
   "/usuario/:id",
   [validarJWT, check("id", "No es un ID válido").isMongoId(), validarCampos],
-  publicacionesUsuarioGet
+  publicacionesUsuarioGet,
 );
 
 router.get(
   "/contacto/:id",
   [validarJWT, check("id", "No es un ID válido").isMongoId(), validarCampos],
-  obtenerContactoPublicacion
+  obtenerContactoPublicacion,
 );
 
 // Solo Admin
@@ -72,7 +72,7 @@ router.post(
         !value
       ) {
         throw new Error(
-          "El nombre del animal es obligatorio para perdidos y adopciones"
+          "El nombre del animal es obligatorio para perdidos y adopciones",
         );
       }
       return true;
@@ -104,17 +104,17 @@ router.post(
 
     check("whatsapp", "El WhatsApp es obligatorio").not().isEmpty(),
     check("whatsapp", "El formato de WhatsApp no es válido").matches(
-      /^\+?[0-9\s\-()]{10,15}$/
+      /^\+?[0-9\s\-()]{10,15}$/,
     ),
     validarCampos,
   ],
-  publicacionesPost
+  publicacionesPost,
 );
 
 router.put(
   "/:id",
   [validarJWT, check("id", "No es un ID válido").isMongoId(), validarCampos],
-  publicacionesPut
+  publicacionesPut,
 );
 
 router.put(
@@ -123,7 +123,6 @@ router.put(
     validarJWT,
     esAdminRole, // Solo admin puede cambiar estados
     check("id", "No es un ID válido").isMongoId(),
-    check("estado", "El estado es obligatorio").not().isEmpty(),
     check("estado").isIn([
       "YA APARECIO",
       "EN BUSCA DE UN HOGAR",
@@ -131,17 +130,17 @@ router.put(
       "INACTIVO",
       "BUSCANDO A SU FAMILIA",
       "APARECIO SU FAMILIA",
-      "SE BUSCA", 
+      "SE BUSCA",
     ]),
     validarCampos,
   ],
-  publicacionesEstadoPut
+  publicacionesEstadoPut,
 );
 
 router.delete(
   "/:id",
   [validarJWT, check("id", "No es un ID válido").isMongoId(), validarCampos],
-  publicacionesDelete
+  publicacionesDelete,
 );
 
 module.exports = router;
