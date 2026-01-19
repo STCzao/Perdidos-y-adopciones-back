@@ -112,16 +112,9 @@ router.post(
 );
 
 router.put(
-  "/:id",
-  [validarJWT, check("id", "No es un ID válido").isMongoId(), validarCampos],
-  publicacionesPut,
-);
-
-router.put(
   "/:id/estado",
   [
     validarJWT,
-    esAdminRole, // Solo admin puede cambiar estados
     check("id", "No es un ID válido").isMongoId(),
     check("estado").isIn([
       "YA APARECIO",
@@ -135,6 +128,12 @@ router.put(
     validarCampos,
   ],
   publicacionesEstadoPut,
+);
+
+router.put(
+  "/:id",
+  [validarJWT, check("id", "No es un ID válido").isMongoId(), validarCampos],
+  publicacionesPut,
 );
 
 router.delete(

@@ -128,9 +128,21 @@ const publicacionesPost = async (req, res = response) => {
   try {
     const { estado, usuario, ...body } = req.body;
 
+    // Determinar estado por defecto según el tipo de publicación
+    const tipoNormalizado = normalizarTexto(body.tipo);
+    let estadoDefecto;
+    
+    if (tipoNormalizado === "PERDIDO") {
+      estadoDefecto = "SE BUSCA";
+    } else if (tipoNormalizado === "ENCONTRADO") {
+      estadoDefecto = "BUSCANDO A SU FAMILIA";
+    } else if (tipoNormalizado === "ADOPCION") {
+      estadoDefecto = "EN BUSCA DE UN HOGAR";
+    }
+
     // Normalizar todos los campos de texto (excepto whatsapp)
     const datosNormalizados = {
-      tipo: normalizarTexto(body.tipo),
+      tipo: tipoNormalizado,
       nombreanimal: normalizarTexto(body.nombreanimal),
       especie: normalizarTexto(body.especie),
       raza: normalizarTexto(body.raza),
@@ -150,6 +162,7 @@ const publicacionesPost = async (req, res = response) => {
       img: body.img ? body.img.toLowerCase() : undefined,
       fecha: body.fecha,
       usuario: req.usuario._id,
+      estado: estadoDefecto,
     };
 
     const publicacion = new Publicacion(datosNormalizados);
