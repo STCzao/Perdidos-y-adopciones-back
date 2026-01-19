@@ -21,7 +21,6 @@ const PublicacionSchema = Schema({
   },
   estado: {
     type: String,
-    required: [true, "El estado es obligatorio"],
     enum: [
       "BUSCANDO A SU FAMILIA",
       "APARECIO SU FAMILIA",
