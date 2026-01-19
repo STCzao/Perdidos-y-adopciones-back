@@ -21,8 +21,16 @@ const PublicacionSchema = Schema({
   },
   estado: {
     type: String,
-    default: "ACTIVO",
-    enum: ["ACTIVO", "ENCONTRADO", "VISTO", "ADOPTADO", "INACTIVO"],
+    required: [true, "El estado es obligatorio"],
+    enum: [
+      "BUSCANDO A SU FAMILIA",
+      "APARECIO SU FAMILIA",
+      "SE BUSCA",
+      "YA APARECIO",
+      "EN BUSCA DE UN HOGAR",
+      "ADOPTADO",
+      "INACTIVO",
+    ],
   },
   raza: {
     type: String,
