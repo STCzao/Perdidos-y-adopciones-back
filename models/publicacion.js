@@ -128,6 +128,12 @@ const PublicacionSchema = Schema({
   },
 });
 
+// Índices para búsqueda y rendimiento
+PublicacionSchema.index({ tipo: 1, estado: 1 });
+PublicacionSchema.index({ raza: "text", lugar: "text", detalles: "text" });
+PublicacionSchema.index({ usuario: 1 });
+PublicacionSchema.index({ fechaCreacion: -1 });
+
 PublicacionSchema.methods.toJSON = function () {
   const { __v, ...publicacion } = this.toObject();
   return publicacion;
