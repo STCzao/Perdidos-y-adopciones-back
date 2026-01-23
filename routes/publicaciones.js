@@ -95,17 +95,89 @@ router.post(
       "SIN ESPECIFICAR",
     ]),
     check("color", "El color es obligatorio").not().isEmpty(),
-    check("color", "El color no puede tener más de 20 caracteres").isLength({
+    check("color", "El color no puede tener más de 80 caracteres").isLength({
       max: 80,
     }),
-    check("edad")
+    
+    // Edad - obligatorio para PERDIDO y ADOPCION
+    check("edad").custom((value, { req }) => {
+      if ((req.body.tipo === "PERDIDO" || req.body.tipo === "ADOPCION") && !value) {
+        throw new Error("La edad es obligatoria para perdidos y adopciones");
+      }
+      if (value && !["CACHORRO", "ADULTO", "MAYOR", "SIN ESPECIFICAR"].includes(value)) {
+        throw new Error("La edad debe ser CACHORRO, ADULTO, MAYOR o SIN ESPECIFICAR");
+      }
+      return true;
+    }),
+
+    // Lugar - obligatorio para PERDIDO y ENCONTRADO
+    check("lugar").custom((value, { req }) => {
+      if ((req.body.tipo === "PERDIDO" || req.body.tipo === "ENCONTRADO") && !value) {
+        throw new Error("El lugar es obligatorio para perdidos y encontrados");
+      }
+      return true;
+    }),
+    check("lugar")
       .optional()
-      .isIn(["CACHORRO", "ADULTO", "MAYOR", "SIN ESPECIFICAR"]),
+      .isLength({ max: 80 })
+      .withMessage("El lugar no puede tener más de 80 caracteres"),
+
+    // Fecha - obligatorio para PERDIDO y ENCONTRADO
+    check("fecha").custom((value, { req }) => {
+      if ((req.body.tipo === "PERDIDO" || req.body.tipo === "ENCONTRADO") && !value) {
+        throw new Error("La fecha es obligatoria para perdidos y encontrados");
+      }
+      return true;
+    }),
+
+    // Campos de ADOPCION - obligatorios para ADOPCION
+    check("afinidad").custom((value, { req }) => {
+      if (req.body.tipo === "ADOPCION" && !value) {
+        throw new Error("La afinidad es obligatoria para adopciones");
+      }
+      if (value && !["ALTA", "MEDIA", "BAJA", "DESCONOZCO"].includes(value)) {
+        throw new Error("La afinidad debe ser ALTA, MEDIA, BAJA o DESCONOZCO");
+      }
+      return true;
+    }),
+
+    check("afinidadanimales").custom((value, { req }) => {
+      if (req.body.tipo === "ADOPCION" && !value) {
+        throw new Error("La afinidad con animales es obligatoria para adopciones");
+      }
+      if (value && !["ALTA", "MEDIA", "BAJA", "DESCONOZCO"].includes(value)) {
+        throw new Error("La afinidad con animales debe ser ALTA, MEDIA, BAJA o DESCONOZCO");
+      }
+      return true;
+    }),
+
+    check("energia").custom((value, { req }) => {
+      if (req.body.tipo === "ADOPCION" && !value) {
+        throw new Error("El nivel de energía es obligatorio para adopciones");
+      }
+      if (value && !["ALTA", "MEDIA", "BAJA"].includes(value)) {
+        throw new Error("El nivel de energía debe ser ALTA, MEDIA o BAJA");
+      }
+      return true;
+    }),
+
+    check("castrado").custom((value, { req }) => {
+      if (req.body.tipo === "ADOPCION" && (value === undefined || value === null)) {
+        throw new Error("El estado de castración es obligatorio para adopciones");
+      }
+      return true;
+    }),
 
     check("whatsapp", "El WhatsApp es obligatorio").not().isEmpty(),
     check("whatsapp", "El formato de WhatsApp no es válido").matches(
       /^\+?[0-9\s\-()]{10,15}$/,
     ),
+    
+    check("img", "La imagen es obligatoria").not().isEmpty(),
+    check("img", "La URL de imagen no es válida").matches(
+      /^https:\/\/res\.cloudinary\.com\/.+$/,
+    ),
+    
     validarCampos,
   ],
   publicacionesPost,
