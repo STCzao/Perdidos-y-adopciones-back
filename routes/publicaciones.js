@@ -169,8 +169,8 @@ router.post(
     }),
 
     check("whatsapp", "El WhatsApp es obligatorio").not().isEmpty(),
-    check("whatsapp", "El formato de WhatsApp no es válido").matches(
-      /^\+?[0-9\s\-()]{10,15}$/,
+    check("whatsapp", "El formato de WhatsApp no es válido (solo números, sin +)").matches(
+      /^[0-9]{10,15}$/,
     ),
     
     check("img", "La imagen es obligatoria").not().isEmpty(),
