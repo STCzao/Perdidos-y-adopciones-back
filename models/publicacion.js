@@ -106,7 +106,7 @@ const PublicacionSchema = Schema({
   whatsapp: {
     type: String,
     required: [true, "El WhatsApp es obligatorio para contacto"],
-    match: [/^\+?[0-9\s\-()]{10,15}$/, "El formato de WhatsApp no es válido"],
+    match: [/^[0-9]{10,15}$/, "El formato de WhatsApp no es válido (solo números, sin +)"],
     maxlength: [15, "El WhatsApp no puede tener más de 15 caracteres"],
   },
   usuario: {
