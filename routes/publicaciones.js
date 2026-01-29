@@ -95,8 +95,8 @@ router.post(
       "SIN ESPECIFICAR",
     ]),
     check("color", "El color es obligatorio").not().isEmpty(),
-    check("color", "El color no puede tener más de 80 caracteres").isLength({
-      max: 80,
+    check("color", "El color no puede tener más de 50 caracteres").isLength({
+      max: 50,
     }),
     
     // Edad - obligatorio para PERDIDO y ADOPCION

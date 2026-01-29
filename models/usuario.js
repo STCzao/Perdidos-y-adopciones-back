@@ -41,11 +41,26 @@ const UsuarioSchema = Schema({
   estado: { type: Boolean, default: true },
   resetToken: { type: String },
   resetTokenExp: { type: Date },
+  refreshTokens: [
+    {
+      token: {
+        type: String,
+        required: true,
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now,
+        expires: 2592000, // 30 días en segundos (auto-delete por MongoDB)
+      },
+      device: String,
+      ip: String,
+    },
+  ],
 });
 
 // Sobreescribir JSON para no devolver campos sensibles
 UsuarioSchema.methods.toJSON = function () {
-  const { __v, password, resetToken, resetTokenExp, _id, ...usuario } =
+  const { __v, password, resetToken, resetTokenExp, refreshTokens, _id, ...usuario } =
     this.toObject();
   usuario.uid = _id;
   return usuario;

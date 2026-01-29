@@ -1,5 +1,6 @@
 const { response } = require("express");
 const Publicacion = require("../models/publicacion");
+const logger = require("../helpers/logger");
 
 // Función para normalizar texto (case-insensitive)
 const normalizarTexto = (texto) => {
@@ -62,7 +63,11 @@ const publicacionesGet = async (req, res = response) => {
       totalPages: Math.ceil(total / limitNum),
     });
   } catch (error) {
-    console.error(error);
+    logger.error("Error al obtener publicaciones", {
+      error: error.message,
+      stack: error.stack,
+      ip: req.ip,
+    });
     res.status(500).json({
       success: false,
       msg: "Error al obtener publicaciones",
@@ -95,7 +100,12 @@ const publicacionesUsuarioGet = async (req, res = response) => {
       publicaciones,
     });
   } catch (error) {
-    console.error(error);
+    logger.error("Error al obtener publicaciones del usuario", {
+      error: error.message,
+      stack: error.stack,
+      usuarioId: id,
+      ip: req.ip,
+    });
     res.status(500).json({
       success: false,
       msg: "Error al obtener publicaciones del usuario",
@@ -124,7 +134,12 @@ const publicacionGet = async (req, res = response) => {
       publicacion,
     });
   } catch (error) {
-    console.error(error);
+    logger.error("Error al obtener la publicación", {
+      error: error.message,
+      stack: error.stack,
+      publicacionId: req.params.id,
+      ip: req.ip,
+    });
     res.status(500).json({
       success: false,
       msg: "Error al obtener la publicación",
@@ -207,14 +222,19 @@ const publicacionesPost = async (req, res = response) => {
     const publicacionDB = await publicacion.save();
     await publicacionDB.populate("usuario", "nombre");
 
+    logger.info("Publicación creada", {
+      tipo: tipoNormalizado,
+      especie: datosNormalizados.especie,
+      usuario: req.usuario.correo,
+      ip: req.ip,
+    });
+
     res.status(201).json({
       success: true,
       msg: "Publicación creada exitosamente",
       publicacion: publicacionDB,
     });
   } catch (error) {
-    console.error(error);
-
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
@@ -233,6 +253,13 @@ const publicacionesPost = async (req, res = response) => {
         errors,
       });
     }
+
+    logger.error("Error al crear publicación", {
+      error: error.message,
+      stack: error.stack,
+      usuario: req.usuario.correo,
+      ip: req.ip,
+    });
 
     res.status(500).json({
       success: false,
@@ -309,7 +336,12 @@ const publicacionesPut = async (req, res = response) => {
       publicacion: publicacionActualizada,
     });
   } catch (error) {
-    console.error(error);
+    logger.error("Error al actualizar publicación", {
+      error: error.message,
+      stack: error.stack,
+      publicacionId: req.params.id,
+      ip: req.ip,
+    });
 
     if (error.name === "ValidationError") {
       const errors = {};
@@ -364,13 +396,25 @@ const publicacionesEstadoPut = async (req, res = response) => {
       { new: true }
     ).populate("usuario", "nombre");
 
+    logger.info("Estado de publicación actualizado", {
+      publicacionId: id,
+      nuevoEstado: normalizarTexto(estado),
+      usuario: req.usuario.correo,
+      ip: req.ip,
+    });
+
     res.json({
       success: true,
       msg: "Estado actualizado exitosamente",
       publicacion: publicacionActualizada,
     });
   } catch (error) {
-    console.error(error);
+    logger.error("Error al actualizar estado de publicación", {
+      error: error.message,
+      stack: error.stack,
+      publicacionId: id,
+      ip: req.ip,
+    });
     res.status(500).json({
       success: false,
       msg: "Error al actualizar el estado",
@@ -405,13 +449,25 @@ const publicacionesDelete = async (req, res = response) => {
 
     const publicacionEliminada = await Publicacion.findByIdAndDelete(id);
 
+    logger.warn("Publicación eliminada", {
+      publicacionId: id,
+      tipo: publicacion.tipo,
+      eliminadaPor: req.usuario.correo,
+      ip: req.ip,
+    });
+
     res.json({
       success: true,
       msg: "Publicación eliminada correctamente",
       publicacion: publicacionEliminada,
     });
   } catch (error) {
-    console.error(error);
+    logger.error("Error al eliminar publicación", {
+      error: error.message,
+      stack: error.stack,
+      publicacionId: id,
+      ip: req.ip,
+    });
     res.status(500).json({
       success: false,
       msg: "Error al eliminar la publicación",
@@ -449,7 +505,12 @@ const obtenerContactoPublicacion = async (req, res = response) => {
       contacto,
     });
   } catch (error) {
-    console.error(error);
+    logger.error("Error al obtener información de contacto", {
+      error: error.message,
+      stack: error.stack,
+      publicacionId: req.params.id,
+      ip: req.ip,
+    });
     res.status(500).json({
       success: false,
       msg: "Error al obtener información de contacto",
@@ -493,7 +554,11 @@ const publicacionesAdminGet = async (req, res = response) => {
       publicaciones,
     });
   } catch (error) {
-    console.error(error);
+    logger.error("Error al obtener publicaciones (Admin)", {
+      error: error.message,
+      stack: error.stack,
+      ip: req.ip,
+    });
     res.status(500).json({
       success: false,
       msg: "Error al obtener publicaciones",
