@@ -1,5 +1,6 @@
 const { response } = require("express");
 const Comunidad = require("../models/comunidad");
+const logger = require("../helpers/logger");
 
 const normalizar = (t) => (typeof t === "string" ? t.trim().toUpperCase() : t);
 
@@ -70,11 +71,24 @@ const comunidadPost = async (req, res = response) => {
     const comunidadDB = await comunidad.save();
     await comunidadDB.populate("usuario", "nombre img rol");
 
+    logger.info("Publicación de comunidad creada", {
+      titulo: data.titulo,
+      categoria: data.categoria,
+      usuario: req.usuario.correo,
+      ip: req.ip,
+    });
+
     res.status(201).json({
       success: true,
       comunidad: comunidadDB,
     });
   } catch (error) {
+    logger.error("Error al crear publicación de comunidad", {
+      error: error.message,
+      stack: error.stack,
+      usuario: req.usuario.correo,
+      ip: req.ip,
+    });
     res.status(500).json({
       success: false,
       msg: "Error al crear",
@@ -112,11 +126,23 @@ const comunidadPut = async (req, res = response) => {
       });
     }
 
+    logger.info("Publicación de comunidad editada", {
+      comunidadId: id,
+      usuario: req.usuario.correo,
+      ip: req.ip,
+    });
+
     res.json({
       success: true,
       editado,
     });
   } catch (error) {
+    logger.error("Error al editar publicación de comunidad", {
+      error: error.message,
+      stack: error.stack,
+      comunidadId: req.params.id,
+      ip: req.ip,
+    });
     res.status(500).json({
       success: false,
       msg: "Error al editar",
@@ -135,11 +161,23 @@ const comunidadDelete = async (req, res = response) => {
 
     const eliminado = await Comunidad.findByIdAndDelete(req.params.id);
 
+    logger.warn("Publicación de comunidad eliminada", {
+      comunidadId: req.params.id,
+      eliminadaPor: req.usuario.correo,
+      ip: req.ip,
+    });
+
     res.json({
       success: true,
       eliminado,
     });
   } catch (error) {
+    logger.error("Error al eliminar publicación de comunidad", {
+      error: error.message,
+      stack: error.stack,
+      comunidadId: req.params.id,
+      ip: req.ip,
+    });
     res.status(500).json({
       success: false,
       msg: "Error al eliminar",

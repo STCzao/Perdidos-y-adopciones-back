@@ -5,6 +5,9 @@ const {
   forgotPassword,
   resetPassword,
   revalidarToken,
+  refreshToken,
+  logout,
+  logoutAll,
 } = require("../controllers/auth");
 const { validarCampos } = require("../middlewares/validar-campos");
 const { validarJWT } = require("../middlewares/validar-jwt");
@@ -41,5 +44,21 @@ router.post(
 
 //Obtener usuario logueado / revalidar token
 router.get("/me", validarJWT, revalidarToken);
+
+// Renovar access token usando refresh token
+router.post(
+  "/refresh",
+  [
+    check("refreshToken", "El refresh token es obligatorio").not().isEmpty(),
+    validarCampos,
+  ],
+  refreshToken
+);
+
+// Logout (cerrar sesión en dispositivo actual)
+router.post("/logout", validarJWT, logout);
+
+// Logout de todos los dispositivos
+router.post("/logout-all", validarJWT, logoutAll);
 
 module.exports = router;

@@ -1,6 +1,7 @@
 const { response } = require("express");
 const bcryptjs = require("bcryptjs");
 const Usuario = require("../models/usuario");
+const logger = require("../helpers/logger");
 
 // ----------------- OBTENER USUARIOS ---------------------
 const usuariosGet = async (req, res = response) => {
@@ -28,6 +29,13 @@ const usuariosPost = async (req, res = response) => {
     usuario.password = bcryptjs.hashSync(password, salt);
 
     await usuario.save();
+    
+    logger.info("Usuario registrado exitosamente", {
+      nombre,
+      correo,
+      ip: req.ip,
+    });
+    
     res.json({ usuario });
   } catch (error) {
     if (error.code === 11000) {
@@ -50,7 +58,12 @@ const usuariosPost = async (req, res = response) => {
       });
     }
 
-    console.error(error);
+    logger.error("Error al registrar usuario", {
+      error: error.message,
+      stack: error.stack,
+      correo,
+      ip: req.ip,
+    });
     res.status(500).json({ msg: "Error en el servidor" });
   }
 };
@@ -93,22 +106,36 @@ const cambiarUsuarioEstado = async (req, res = response) => {
 
   if (!usuario) {
     return res.status(404).json({
-      ok: false,
+      success: false,
       msg: "Usuario no encontrado",
     });
   }
 
   if (usuario.rol === "ADMIN_ROLE") {
     return res.status(403).json({
-      ok: false,
+      success: false,
       msg: "No se puede cambiar el estado de un administrador",
     });
   }
 
   usuario.estado = estado;
+  
+  // ✅ PARCHE: Si se desactiva usuario, invalidar todos sus tokens
+  if (estado === false) {
+    usuario.refreshTokens = [];
+  }
+  
   await usuario.save();
 
-  res.json({ ok: true, usuario });
+  logger.info("Estado de usuario modificado", {
+    usuarioId: id,
+    nuevoEstado: estado,
+    modificadoPor: req.usuario.correo,
+    ip: req.ip,
+    tokensInvalidados: estado === false,
+  });
+
+  res.json({ success: true, usuario });
 };
 
 const usuariosDelete = async (req, res = response) => {
@@ -125,12 +152,19 @@ const usuariosDelete = async (req, res = response) => {
   if (req.usuario._id.toString() === id) {
     const usuario = await Usuario.findByIdAndUpdate(
       id,
-      { estado: false },
+      { estado: false, refreshTokens: [] }, // ✅ PARCHE: Invalidar todos los tokens
       { new: true }
     );
 
+    logger.warn("Usuario eliminó su propia cuenta", {
+      usuarioId: id,
+      correo: req.usuario.correo,
+      ip: req.ip,
+      tokensInvalidados: true,
+    });
+
     return res.json({
-      ok: true,
+      success: true,
       msg: "Cuenta eliminada correctamente",
       usuario,
       logout: true, // Indicar que debe cerrar sesión
@@ -140,12 +174,19 @@ const usuariosDelete = async (req, res = response) => {
   // Si es admin eliminando a otro usuario
   const usuario = await Usuario.findByIdAndUpdate(
     id,
-    { estado: false },
+    { estado: false, refreshTokens: [] }, // ✅ PARCHE: Invalidar todos los tokens
     { new: true }
   );
 
+  logger.warn("Usuario eliminado por administrador", {
+    usuarioEliminado: id,
+    eliminadoPor: req.usuario.correo,
+    ip: req.ip,
+    tokensInvalidados: true,
+  });
+
   res.json({
-    ok: true,
+    success: true,
     msg: "Usuario eliminado correctamente",
     usuario,
   });
@@ -188,26 +229,31 @@ const miPerfilGet = async (req, res = response) => {
 
     if (!usuario) {
       return res.status(404).json({
-        ok: false,
+        success: false,
         msg: "Usuario no encontrado",
       });
     }
 
     if (!usuario.estado) {
       return res.status(400).json({
-        ok: false,
+        success: false,
         msg: "Usuario inactivo",
       });
     }
 
     return res.json({
-      ok: true,
+      success: true,
       usuario,
     });
   } catch (error) {
-    console.error("Error en miPerfilGet:", error);
+    logger.error("Error en miPerfilGet", {
+      error: error.message,
+      stack: error.stack,
+      usuario: req.usuario?.correo,
+      ip: req.ip,
+    });
     return res.status(500).json({
-      ok: false,
+      success: false,
       msg: "Error del servidor al obtener perfil",
     });
   }
@@ -333,16 +379,22 @@ const miPerfilPut = async (req, res = response) => {
     }
 
     res.json({
-      ok: true,
+      success: true,
       usuario,
       msg: "Perfil actualizado exitosamente",
     });
   } catch (error) {
-    console.error("Error en miPerfilPut:", error);
+    logger.error("Error en miPerfilPut", {
+      error: error.message,
+      stack: error.stack,
+      usuario: req.usuario?.correo,
+      ip: req.ip,
+    });
 
     // Manejar error de duplicado de correo (aunque no debería pasar)
     if (error.code === 11000) {
       return res.status(400).json({
+        success: false,
         msg: "El correo electrónico ya está en uso",
         errors: { correo: "El correo electrónico ya está en uso" },
       });
@@ -354,12 +406,14 @@ const miPerfilPut = async (req, res = response) => {
         errors[key] = error.errors[key].message;
       });
       return res.status(400).json({
+        success: false,
         msg: "Error de validación de datos",
         errors,
       });
     }
 
     res.status(500).json({
+      success: false,
       msg: "Error interno del servidor al actualizar perfil",
     });
   }

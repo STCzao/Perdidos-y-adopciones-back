@@ -63,7 +63,7 @@ const PublicacionSchema = Schema({
   color: {
     type: String,
     required: [true, "El color es obligatorio"],
-    maxlength: [80, "El color no puede tener más de 50 caracteres"],
+    maxlength: [50, "El color no puede tener más de 50 caracteres"],
   },
   detalles: {
     type: String,

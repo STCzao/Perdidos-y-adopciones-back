@@ -1,11 +1,14 @@
 const { Resend } = require("resend");
+const logger = require("./logger");
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 const enviarEmail = async (to, subject, html) => {
-  console.log("Enviando correo a:", to);
-  console.log("From:", process.env.RESEND_FROM);
-  console.log("Subject:", subject);
+  logger.debug("Intentando enviar correo", {
+    destinatario: to,
+    asunto: subject,
+    from: process.env.RESEND_FROM,
+  });
 
   try {
     const data = await resend.emails.send({
@@ -15,13 +18,19 @@ const enviarEmail = async (to, subject, html) => {
       html: html,
     });
 
-    console.log("Correo enviado correctamente:", data);
+    logger.info("Correo enviado exitosamente", {
+      destinatario: to,
+      asunto: subject,
+      messageId: data.id,
+    });
   } catch (error) {
-    console.error("Error al enviar correo:", error);
-
-    if (error?.response) {
-      console.error("Resend error response:", error.response);
-    }
+    logger.error("Error al enviar correo", {
+      error: error.message,
+      stack: error.stack,
+      destinatario: to,
+      asunto: subject,
+      response: error?.response,
+    });
 
     throw error;
   }
