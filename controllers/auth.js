@@ -73,9 +73,10 @@ const login = async (req, res = response) => {
     });
     
     res.json({ 
+      success: true,
       usuario, 
-      token: accessToken,
-      refreshToken: refreshToken,
+      accessToken,
+      refreshToken,
     });
   } catch (error) {
     logger.error("Error en login", {
@@ -129,6 +130,7 @@ const forgotPassword = async (req, res = response) => {
     });
 
     res.json({
+      success: true,
       msg: "Se envió un correo para restablecer la contraseña (verifica la casilla de Spam)",
     });
   } catch (error) {
@@ -198,7 +200,10 @@ const resetPassword = async (req, res = response) => {
       tokensInvalidados: true,
     });
 
-    res.json({ msg: "Contraseña actualizada correctamente" });
+    res.json({ 
+      success: true,
+      msg: "Contraseña actualizada correctamente" 
+    });
   } catch (error) {
     logger.error("Error en resetPassword", {
       error: error.message,
@@ -213,21 +218,28 @@ const resetPassword = async (req, res = response) => {
 const revalidarToken = async (req, res = response) => {
   try {
     const usuario = req.usuario; // viene del middleware validarJWT
-    const token = await generarJWT(usuario.id); // opcional: generar token nuevo
     
-    logger.debug("Token revalidado", {
+    logger.debug("Usuario autenticado", {
       correo: usuario.correo,
       ip: req.ip,
     });
     
-    res.json({ usuario, token });
+    // No renovar token aquí - solo devolver usuario
+    // El frontend debe usar /refresh para renovar tokens
+    res.json({ 
+      success: true,
+      usuario 
+    });
   } catch (error) {
     logger.error("Error en revalidarToken", {
       error: error.message,
       stack: error.stack,
       ip: req.ip,
     });
-    res.status(500).json({ msg: "Error en el servidor" });
+    res.status(500).json({ 
+      success: false,
+      msg: "Error en el servidor" 
+    });
   }
 };
 
@@ -341,7 +353,7 @@ const refreshToken = async (req, res = response) => {
 
     res.json({
       success: true,
-      token: newAccessToken,
+      accessToken: newAccessToken,
       refreshToken: newRefreshToken,
     });
   } catch (error) {
