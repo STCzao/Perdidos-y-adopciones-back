@@ -20,12 +20,8 @@ const router = Router();
 // Públicas - Cualquiera puede ver publicaciones activas
 router.get("/", publicacionesGet);
 
-// Individual - Pública
-router.get(
-  "/:id",
-  [check("id", "No es un ID válido").isMongoId(), validarCampos],
-  publicacionGet,
-);
+// Solo Admin - DEBE IR ANTES de /:id para evitar conflictos
+router.get("/admin/todas", [validarJWT, esAdminRole], publicacionesAdminGet);
 
 // Protegidas - Requieren autenticación
 router.get(
@@ -40,8 +36,12 @@ router.get(
   obtenerContactoPublicacion,
 );
 
-// Solo Admin
-router.get("/admin/todas", [validarJWT, esAdminRole], publicacionesAdminGet);
+// Individual - Pública - DEBE IR AL FINAL de las rutas GET específicas
+router.get(
+  "/:id",
+  [check("id", "No es un ID válido").isMongoId(), validarCampos],
+  publicacionGet,
+);
 
 // CRUD protegido
 router.post(
