@@ -37,6 +37,10 @@ class Server {
     const rateLimit = require("express-rate-limit");
     const compression = require("compression");
 
+    // ========== TRUST PROXY - Necesario para Render/Heroku/Vercel ==========
+    // Permite obtener la IP real del cliente detrás de proxies
+    this.app.set('trust proxy', 1);
+
     // ========== COMPRESSION - Reducir bandwidth 60-70% ==========
     this.app.use(compression());
 
@@ -107,13 +111,14 @@ class Server {
     //Limitir estricto para login (evita fuerza bruta)
     const loginLimiter = rateLimit({
       windowMs: 15 * 60 * 1000, // 15 minutos
-      max: 5, // Limitar a 5 solicitudes por ventana
+      max: 10, // Aumentado de 5 a 10 para evitar bloqueos legítimos
       message: {
         success: false,
         msg: "Demasiados intentos de inicio de sesión. Por favor, intente nuevamente después de 15 minutos.",
       },
       standardHeaders: true,
       legacyHeaders: false,
+      skipSuccessfulRequests: false, // Contar todas las peticiones
     });
 
     // Limiter para forgot-password (evita spam de emails)
@@ -124,16 +129,34 @@ class Server {
         success: false,
         msg: "Demasiadas solicitudes de restablecimiento de contraseña. Por favor, intente nuevamente después de 15 minutos.",
       },
+      standardHeaders: true,
+      legacyHeaders: false,
     });
 
-    // Limiter para refresh token (evita abuso de renovación)
+    // Limiter para refresh token (AUMENTADO - requests automáticos del frontend)
     const refreshLimiter = rateLimit({
-      windowMs: 15 * 60 * 1000, // 15 minutos
-      max: 10, // Máximo 10 renovaciones por ventana
+      windowMs: 5 * 60 * 1000, // 5 minutos (reducido)
+      max: 30, // Aumentado de 10 a 30 para evitar loops
       message: {
         success: false,
-        msg: "Demasiados intentos de renovación de token. Por favor, intente nuevamente después de 15 minutos.",
+        msg: "Demasiados intentos de renovación de token. Por favor, intente nuevamente después de 5 minutos.",
       },
+      standardHeaders: true,
+      legacyHeaders: false,
+      skipSuccessfulRequests: true, // No contar renovaciones exitosas
+    });
+
+    // Limiter para GET /me (endpoint que frontend llama frecuentemente)
+    const meLimiter = rateLimit({
+      windowMs: 1 * 60 * 1000, // 1 minuto
+      max: 60, // 60 requests por minuto
+      message: {
+        success: false,
+        msg: "Demasiadas solicitudes de validación.",
+      },
+      standardHeaders: true,
+      legacyHeaders: false,
+      skipSuccessfulRequests: true,
     });
 
     //Limiter general para toda la API
@@ -144,17 +167,30 @@ class Server {
         success: false,
         msg: "Demasiadas solicitudes. Por favor, intente nuevamente más tarde.",
       },
+      standardHeaders: true,
+      legacyHeaders: false,
     });
 
-    //Aplicar limiters a rutas especificas
+    //Aplicar limiters a rutas especificas (del más específico al más general)
     this.app.use("/api/auth/login", loginLimiter);
     this.app.use("/api/auth/forgot-password", forgotPasswordLimiter);
     this.app.use("/api/auth/refresh", refreshLimiter);
+    this.app.use("/api/auth/me", meLimiter);
     this.app.use("/api/usuarios", generalLimiter);
     this.app.use("/api/", generalLimiter);
 
     // Lectura y parseo del body
     this.app.use(express.json());
+
+    // Prevenir caché en endpoints de autenticación (evita loops)
+    this.app.use("/api/auth", (req, res, next) => {
+      res.set({
+        'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      });
+      next();
+    });
 
     // Directorio público
     this.app.use(express.static("public"));
