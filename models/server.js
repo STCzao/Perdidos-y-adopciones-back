@@ -73,18 +73,34 @@ class Server {
     // ========== SANITIZACIÓN NoSQL - Previene inyección ==========
     const logger = require("../helpers/logger");
     
-    this.app.use(
-      mongoSanitize({
-        replaceWith: "_",
-        onSanitize: ({ req, key }) => {
-          logger.warn("Intento de inyección NoSQL detectado", {
-            campo: key,
-            ip: req.ip,
-            url: req.originalUrl,
-          });
-        },
-      }),
-    );
+    // Express 5 compatibility: no usar replaceWith para evitar error "Cannot set property query"
+    this.app.use((req, res, next) => {
+      // Sanitizar manualmente para compatibilidad con Express 5
+      const sanitize = (obj) => {
+        if (typeof obj !== 'object' || obj === null) return obj;
+        
+        Object.keys(obj).forEach(key => {
+          // Detectar y eliminar operadores NoSQL peligrosos
+          if (key.startsWith('$') || key.includes('.')) {
+            logger.warn("Intento de inyección NoSQL detectado", {
+              campo: key,
+              ip: req.ip,
+              url: req.originalUrl,
+            });
+            delete obj[key];
+          } else if (typeof obj[key] === 'object') {
+            sanitize(obj[key]);
+          }
+        });
+        return obj;
+      };
+
+      if (req.body) sanitize(req.body);
+      if (req.query) sanitize(req.query);
+      if (req.params) sanitize(req.params);
+      
+      next();
+    });
 
     // ========== RATE LIMITING ==========
 
