@@ -312,9 +312,13 @@ const refreshToken = async (req, res = response) => {
     );
 
     if (!tokenExiste) {
-      logger.warn("Refresh token no encontrado en DB - posible robo", {
+      const tokensActuales = usuario.refreshTokens?.length || 0;
+      
+      logger.warn("Refresh token no encontrado en DB", {
         correo: usuario.correo,
         ip: req.ip,
+        tokensActuales,
+        motivo: tokensActuales === 0 ? "Usuario cerró sesión previamente" : "Token inválido o expirado - posible robo"
       });
 
       // Invalidar TODOS los refresh tokens por seguridad
