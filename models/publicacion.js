@@ -74,7 +74,7 @@ const PublicacionSchema = Schema({
     required: function () {
       return this.tipo === "PERDIDO" || this.tipo === "ADOPCION";
     },
-    enum: ["CACHORRO", "ADULTO", "MAYOR", "SIN ESPECIFICAR"],
+    enum: ["CACHORRO", "JOVEN", "ADULTO", "MAYOR", "SIN ESPECIFICAR"],
   },
   afinidad: {
     type: String,
@@ -106,7 +106,10 @@ const PublicacionSchema = Schema({
   whatsapp: {
     type: String,
     required: [true, "El WhatsApp es obligatorio para contacto"],
-    match: [/^[0-9]{10,15}$/, "El formato de WhatsApp no es válido (solo números, sin +)"],
+    match: [
+      /^[0-9]{10,15}$/,
+      "El formato de WhatsApp no es válido (solo números, sin +)",
+    ],
     maxlength: [15, "El WhatsApp no puede tener más de 15 caracteres"],
   },
   usuario: {
