@@ -146,17 +146,17 @@ class Server {
       skipSuccessfulRequests: true, // No contar renovaciones exitosas
     });
 
-    // Limiter para GET /me (endpoint que frontend llama frecuentemente)
-    const meLimiter = rateLimit({
+    // Limiter para mi-perfil (endpoint frecuentemente consultado)
+    const miPerfilLimiter = rateLimit({
       windowMs: 1 * 60 * 1000, // 1 minuto
       max: 60, // 60 requests por minuto
       message: {
         success: false,
-        msg: "Demasiadas solicitudes de validación.",
+        msg: "Demasiadas solicitudes de perfil. Por favor, intente nuevamente más tarde.",
       },
       standardHeaders: true,
       legacyHeaders: false,
-      skipSuccessfulRequests: true,
+      skipSuccessfulRequests: true, // No contar requests exitosos
     });
 
     //Limiter general para toda la API
@@ -175,7 +175,7 @@ class Server {
     this.app.use("/api/auth/login", loginLimiter);
     this.app.use("/api/auth/forgot-password", forgotPasswordLimiter);
     this.app.use("/api/auth/refresh", refreshLimiter);
-    this.app.use("/api/auth/me", meLimiter);
+    this.app.use("/api/usuarios/mi-perfil", miPerfilLimiter);
     this.app.use("/api/usuarios", generalLimiter);
     this.app.use("/api/", generalLimiter);
 

@@ -4,7 +4,6 @@ const {
   login,
   forgotPassword,
   resetPassword,
-  revalidarToken,
   refreshToken,
   logout,
   logoutAll,
@@ -41,9 +40,6 @@ router.post(
   ],
   resetPassword
 );
-
-//Obtener usuario logueado / revalidar token
-router.get("/me", validarJWT, revalidarToken);
 
 // Renovar access token usando refresh token
 router.post(

@@ -214,35 +214,6 @@ const resetPassword = async (req, res = response) => {
   }
 };
 
-// ----------------- REVALIDAR TOKEN / OBTENER USUARIO -----------------------
-const revalidarToken = async (req, res = response) => {
-  try {
-    const usuario = req.usuario; // viene del middleware validarJWT
-    
-    logger.debug("Usuario autenticado", {
-      correo: usuario.correo,
-      ip: req.ip,
-    });
-    
-    // No renovar token aquí - solo devolver usuario
-    // El frontend debe usar /refresh para renovar tokens
-    res.json({ 
-      success: true,
-      usuario 
-    });
-  } catch (error) {
-    logger.error("Error en revalidarToken", {
-      error: error.message,
-      stack: error.stack,
-      ip: req.ip,
-    });
-    res.status(500).json({ 
-      success: false,
-      msg: "Error en el servidor" 
-    });
-  }
-};
-
 // ----------------- REFRESH TOKEN -----------------------
 const refreshToken = async (req, res = response) => {
   const { refreshToken } = req.body;
@@ -438,7 +409,6 @@ module.exports = {
   login,
   forgotPassword,
   resetPassword,
-  revalidarToken,
   refreshToken,
   logout,
   logoutAll,

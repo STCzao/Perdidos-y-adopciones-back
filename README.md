@@ -201,7 +201,9 @@ Pet-adoption-backend/
 | POST | `/login` | Público | Iniciar sesión |
 | POST | `/forgot-password` | Público | Solicitar reset de contraseña |
 | POST | `/reset-password/:token` | Público | Resetear contraseña |
-| GET | `/me` | Privado | Obtener usuario logueado |
+| POST | `/refresh` | Público | Renovar access token |
+| POST | `/logout` | Privado | Cerrar sesión (dispositivo actual) |
+| POST | `/logout-all` | Privado | Cerrar sesión en todos los dispositivos |
 
 ### Usuarios (`/api/usuarios`)
 
@@ -406,7 +408,7 @@ Para facilitar las pruebas, se recomienda crear una colección con:
 
 1. **Registro:** POST `/usuarios` → Crear usuario
 2. **Login:** POST `/auth/login` → Guardar token
-3. **Autenticación:** GET `/auth/me` → Verificar token
+3. **Perfil:** GET `/usuarios/mi-perfil` → Verificar autenticación
 4. **CRUD:** Probar endpoints según necesidad
 5. **Permisos:** Verificar roles (Admin vs Usuario)
 
