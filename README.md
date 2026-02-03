@@ -278,7 +278,7 @@ Pet-adoption-backend/
   tamaño: "MINI" | "PEQUEÑO" | "MEDIANO" | "GRANDE" | "SIN ESPECIFICAR",
   color: String,            // Max 80 caracteres
   detalles: String,         // Max 250 caracteres
-  edad: "CACHORRO" | "ADULTO" | "MAYOR" | "SIN ESPECIFICAR",
+  edad: "CACHORRO" | "JOVEN" | "ADULTO" | "MAYOR" | "SIN ESPECIFICAR",
   
   // Campos condicionales según tipo
   lugar: String,            // Para PERDIDO/ENCONTRADO

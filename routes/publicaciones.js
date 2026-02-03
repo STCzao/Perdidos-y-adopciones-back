@@ -104,8 +104,8 @@ router.post(
       if ((req.body.tipo === "PERDIDO" || req.body.tipo === "ADOPCION") && !value) {
         throw new Error("La edad es obligatoria para perdidos y adopciones");
       }
-      if (value && !["CACHORRO", "ADULTO", "MAYOR", "SIN ESPECIFICAR"].includes(value)) {
-        throw new Error("La edad debe ser CACHORRO, ADULTO, MAYOR o SIN ESPECIFICAR");
+      if (value && !["CACHORRO", "JOVEN", "ADULTO", "MAYOR", "SIN ESPECIFICAR"].includes(value)) {
+        throw new Error("La edad debe ser CACHORRO, JOVEN, ADULTO, MAYOR o SIN ESPECIFICAR");
       }
       return true;
     }),
