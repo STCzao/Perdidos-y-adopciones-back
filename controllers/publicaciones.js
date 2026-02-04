@@ -120,7 +120,9 @@ const publicacionGet = async (req, res = response) => {
     const publicacion = await Publicacion.findOne({
       _id: id,
       estado: { $ne: "INACTIVO" },
-    }).populate("usuario", "nombre");
+    })
+    .populate("usuario", "nombre")
+    .select("-whatsapp");
 
     if (!publicacion) {
       return res.status(404).json({
@@ -484,7 +486,7 @@ const obtenerContactoPublicacion = async (req, res = response) => {
     const publicacion = await Publicacion.findOne({
       _id: id,
       estado: { $ne: "INACTIVO" },
-    }).populate("usuario", "nombre telefono correo");
+    }).select("whatsapp");
 
     if (!publicacion) {
       return res.status(404).json({
@@ -493,16 +495,9 @@ const obtenerContactoPublicacion = async (req, res = response) => {
       });
     }
 
-    const contacto = {
-      nombre: publicacion.usuario.nombre,
-      telefono: publicacion.usuario.telefono,
-      correo: publicacion.usuario.correo,
-      whatsapp: publicacion.whatsapp,
-    };
-
     res.json({
       success: true,
-      contacto,
+      whatsapp: publicacion.whatsapp,
     });
   } catch (error) {
     logger.error("Error al obtener información de contacto", {
