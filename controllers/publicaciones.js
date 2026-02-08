@@ -40,8 +40,9 @@ const publicacionesGet = async (req, res = response) => {
         { detalles: { $regex: search, $options: "i" } },
       ];
       
-      // Solo buscar en 'lugar' si no es ADOPCION (porque ADOPCION no tiene lugar)
+      // Solo buscar en 'localidad' y 'lugar' si no es ADOPCION
       if (!tipo || tipo.toUpperCase() !== "ADOPCION") {
+        query.$or.push({ localidad: { $regex: search, $options: "i" } });
         query.$or.push({ lugar: { $regex: search, $options: "i" } });
       }
     }
@@ -170,6 +171,7 @@ const publicacionesPost = async (req, res = response) => {
     const erroresValidacion = {};
     
     if (tipoNormalizado === "PERDIDO" || tipoNormalizado === "ENCONTRADO") {
+      if (!body.localidad) erroresValidacion.localidad = "La localidad es obligatoria para este tipo de publicación";
       if (!body.lugar) erroresValidacion.lugar = "El lugar es obligatorio para este tipo de publicación";
       if (!body.fecha) erroresValidacion.fecha = "La fecha es obligatoria para este tipo de publicación";
     }
@@ -209,6 +211,7 @@ const publicacionesPost = async (req, res = response) => {
 
     // Agregar campos condicionales según el tipo
     if (tipoNormalizado === "PERDIDO" || tipoNormalizado === "ENCONTRADO") {
+      datosNormalizados.localidad = normalizarTexto(body.localidad);
       datosNormalizados.lugar = normalizarTexto(body.lugar);
       datosNormalizados.fecha = body.fecha; // Mantener como String
     }
@@ -315,7 +318,8 @@ const publicacionesPut = async (req, res = response) => {
     const tipoExistente = publicacionExistente.tipo;
     
     if (tipoExistente === "ADOPCION") {
-      // Las publicaciones de ADOPCION no deben tener lugar ni fecha
+      // Las publicaciones de ADOPCION no deben tener localidad, lugar ni fecha
+      delete datosNormalizados.localidad;
       delete datosNormalizados.lugar;
       delete datosNormalizados.fecha;
     } else if (tipoExistente === "PERDIDO" || tipoExistente === "ENCONTRADO") {
@@ -329,7 +333,7 @@ const publicacionesPut = async (req, res = response) => {
     const publicacionActualizada = await Publicacion.findByIdAndUpdate(
       id,
       datosNormalizados,
-      { new: true }
+      { new: true, runValidators: true }
     ).populate("usuario", "nombre");
 
     res.json({
