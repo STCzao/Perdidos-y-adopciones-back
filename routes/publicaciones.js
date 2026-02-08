@@ -110,7 +110,15 @@ router.post(
       return true;
     }),
 
-    // Lugar - obligatorio para PERDIDO y ENCONTRADO
+    // Localidad - obligatorio para PERDIDO y ENCONTRADO
+    check("localidad").custom((value, { req }) => {
+      if ((req.body.tipo === "PERDIDO" || req.body.tipo === "ENCONTRADO") && !value) {
+        throw new Error("La localidad es obligatoria para perdidos y encontrados");
+      }
+      return true;
+    }),
+
+    // Lugar (detalles) - obligatorio para PERDIDO y ENCONTRADO
     check("lugar").custom((value, { req }) => {
       if ((req.body.tipo === "PERDIDO" || req.body.tipo === "ENCONTRADO") && !value) {
         throw new Error("El lugar es obligatorio para perdidos y encontrados");

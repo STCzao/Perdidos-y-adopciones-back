@@ -1,4 +1,5 @@
 const { Schema, model } = require("mongoose");
+const { LOCALIDADES_TUCUMAN } = require("../helpers/localidades");
 
 const PublicacionSchema = Schema({
   tipo: {
@@ -36,6 +37,13 @@ const PublicacionSchema = Schema({
     type: String,
     required: [true, "La raza es obligatoria"],
     maxlength: [40, "La raza no puede tener más de 40 caracteres"],
+  },
+  localidad: {
+    type: String,
+    required: function () {
+      return this.tipo === "PERDIDO" || this.tipo === "ENCONTRADO";
+    },
+    enum: LOCALIDADES_TUCUMAN,
   },
   lugar: {
     type: String,
@@ -133,7 +141,7 @@ const PublicacionSchema = Schema({
 
 // Índices para búsqueda y rendimiento
 PublicacionSchema.index({ tipo: 1, estado: 1 });
-PublicacionSchema.index({ raza: "text", lugar: "text", detalles: "text" });
+PublicacionSchema.index({ raza: "text", localidad: "text", lugar: "text", detalles: "text" });
 PublicacionSchema.index({ usuario: 1 });
 PublicacionSchema.index({ fechaCreacion: -1 });
 
