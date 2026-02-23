@@ -1,5 +1,6 @@
 const { Router } = require("express");
 const { check } = require("express-validator");
+const { RAZAS, RAZAS_POR_ESPECIE } = require("../helpers/razas");
 const {
   publicacionesGet,
   publicacionesUsuarioGet,
@@ -19,6 +20,11 @@ const router = Router();
 
 // Públicas - Cualquiera puede ver publicaciones activas
 router.get("/", publicacionesGet);
+
+// Catálogo de razas disponibles (para desplegable en formulario Post/Put)
+router.get("/razas", (req, res) =>
+  res.json({ success: true, razas: RAZAS, razasPorEspecie: RAZAS_POR_ESPECIE })
+);
 
 // Solo Admin - DEBE IR ANTES de /:id para evitar conflictos
 router.get("/admin/todas", [validarJWT, esAdminRole], publicacionesAdminGet);
@@ -62,8 +68,17 @@ router.post(
     ]),
 
     check("raza", "La raza es obligatoria").not().isEmpty(),
-    check("raza", "La raza no puede tener más de 40 caracteres").isLength({
-      max: 40,
+    check("raza", "Raza no válida, debe seleccionarse del listado").isIn(RAZAS),
+    // Cross-validation: la raza debe corresponder a la especie declarada.
+    // RAZAS_POR_ESPECIE tiene las mismas claves que el enum de especie,
+    // por lo que basta verificar que la raza esté dentro del subarray correcto.
+    check("raza").custom((raza, { req }) => {
+      const especie = req.body.especie;
+      if (!especie || !RAZAS_POR_ESPECIE[especie]) return true; // especie inválida ya la detecta su propio check
+      if (!RAZAS_POR_ESPECIE[especie].includes(raza)) {
+        throw new Error(`La raza "${raza}" no corresponde a la especie "${especie}"`);
+      }
+      return true;
     }),
 
     check("nombreanimal").custom((value, { req }) => {
@@ -212,7 +227,100 @@ router.put(
 
 router.put(
   "/:id",
-  [validarJWT, check("id", "No es un ID válido").isMongoId(), validarCampos],
+  [
+    validarJWT,
+    check("id", "No es un ID válido").isMongoId(),
+
+    // Enums opcionales — si se envían, deben ser valores válidos
+    check("especie")
+      .optional()
+      .isIn(["PERRO", "GATO", "AVE", "CONEJO", "OTRO"])
+      .withMessage("Especie no válida"),
+
+    check("raza")
+      .optional()
+      .isIn(RAZAS)
+      .withMessage("Raza no válida, debe seleccionarse del listado"),
+
+    check("sexo")
+      .optional()
+      .isIn(["MACHO", "HEMBRA", "DESCONOZCO"])
+      .withMessage("Sexo no válido"),
+
+    check("tamaño")
+      .optional()
+      .isIn(["MINI", "PEQUEÑO", "MEDIANO", "GRANDE", "SIN ESPECIFICAR"])
+      .withMessage("Tamaño no válido"),
+
+    check("edad")
+      .optional()
+      .isIn(["CACHORRO", "JOVEN", "ADULTO", "MAYOR", "SIN ESPECIFICAR"])
+      .withMessage("Edad no válida"),
+
+    check("afinidad")
+      .optional()
+      .isIn(["ALTA", "MEDIA", "BAJA", "DESCONOZCO"])
+      .withMessage("Afinidad no válida"),
+
+    check("afinidadanimales")
+      .optional()
+      .isIn(["ALTA", "MEDIA", "BAJA", "DESCONOZCO"])
+      .withMessage("Afinidad con animales no válida"),
+
+    check("energia")
+      .optional()
+      .isIn(["ALTA", "MEDIA", "BAJA"])
+      .withMessage("Nivel de energía no válido"),
+
+    // Strings opcionales con límite de longitud
+    check("nombreanimal")
+      .optional()
+      .isLength({ max: 60 })
+      .withMessage("El nombre del animal no puede tener más de 60 caracteres"),
+
+    check("color")
+      .optional()
+      .not().isEmpty()
+      .withMessage("El color no puede estar vacío")
+      .isLength({ max: 50 })
+      .withMessage("El color no puede tener más de 50 caracteres"),
+
+    check("lugar")
+      .optional()
+      .isLength({ max: 80 })
+      .withMessage("El lugar no puede tener más de 80 caracteres"),
+
+    check("detalles")
+      .optional()
+      .isLength({ max: 250 })
+      .withMessage("Los detalles no pueden tener más de 250 caracteres"),
+
+    // Formato estricto para whatsapp e imagen
+    check("whatsapp")
+      .optional()
+      .matches(/^[0-9]{10,15}$/)
+      .withMessage("El formato de WhatsApp no es válido (solo números, sin +)"),
+
+    check("img")
+      .optional()
+      .matches(/^https:\/\/res\.cloudinary\.com\/.+$/)
+      .withMessage("La URL de imagen no es válida"),
+
+    // Cross-validation PUT: solo se aplica cuando ambos campos llegan en el mismo body.
+    // Si solo llega uno de los dos, no se puede validar la relación a nivel de ruta
+    // (el controller bloquea cambios de tipo, y el enum de Mongoose es la última barrera).
+    check("raza").optional().custom((raza, { req }) => {
+      const especie = req.body.especie;
+      if (!especie) return true; // no se está cambiando especie en este request
+      if (!RAZAS_POR_ESPECIE[especie]) return true; // especie inválida detectada por su propio check
+      if (!RAZAS_POR_ESPECIE[especie].includes(raza)) {
+        throw new Error(`La raza "${raza}" no corresponde a la especie "${especie}"`);
+      }
+      return true;
+    }),
+
+    validarCampos,
+  ],
   publicacionesPut,
 );
 

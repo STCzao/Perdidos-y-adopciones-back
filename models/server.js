@@ -176,7 +176,6 @@ class Server {
     this.app.use("/api/auth/forgot-password", forgotPasswordLimiter);
     this.app.use("/api/auth/refresh", refreshLimiter);
     this.app.use("/api/usuarios/mi-perfil", miPerfilLimiter);
-    this.app.use("/api/usuarios", generalLimiter);
     this.app.use("/api/", generalLimiter);
 
     // Lectura y parseo del body

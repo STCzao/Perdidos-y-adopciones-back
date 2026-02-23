@@ -61,16 +61,7 @@ const generarRefreshToken = (uid = "") => {
   });
 };
 
-/**
- * Función legacy para compatibilidad
- * Ahora genera access token
- */
-const generarJWT = (uid = "") => {
-  return generarAccessToken(uid);
-};
-
 module.exports = {
-  generarJWT,
   generarAccessToken,
   generarRefreshToken,
 };

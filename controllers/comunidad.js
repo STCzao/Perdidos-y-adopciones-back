@@ -4,7 +4,7 @@ const logger = require("../helpers/logger");
 
 const normalizar = (t) => (typeof t === "string" ? t.trim().toUpperCase() : t);
 
-const comunidadGet = async (req, res = response) => {
+const comunidadGet = async (req, res = response, next) => {
   try {
     const comunidades = await Comunidad.find()
       .populate("usuario", "nombre img rol")
@@ -15,14 +15,11 @@ const comunidadGet = async (req, res = response) => {
       comunidades,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      msg: "Error al obtener comunidad",
-    });
+    return next(error);
   }
 };
 
-const comunidadGetById = async (req, res = response) => {
+const comunidadGetById = async (req, res = response, next) => {
   try {
     const post = await Comunidad.findById(req.params.id).populate(
       "usuario",
@@ -41,14 +38,11 @@ const comunidadGetById = async (req, res = response) => {
       post,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      msg: "Error al obtener la publicacion",
-    });
+    return next(error);
   }
 };
 
-const comunidadPost = async (req, res = response) => {
+const comunidadPost = async (req, res = response, next) => {
   try {
     if (req.usuario.rol !== "ADMIN_ROLE") {
       return res.status(403).json({
@@ -63,7 +57,7 @@ const comunidadPost = async (req, res = response) => {
       titulo: normalizar(titulo),
       contenido,
       categoria: normalizar(categoria),
-      img: img.toLowerCase(),
+      img: img ? img.toLowerCase() : undefined,
       usuario: req.usuario._id,
     };
 
@@ -83,20 +77,11 @@ const comunidadPost = async (req, res = response) => {
       comunidad: comunidadDB,
     });
   } catch (error) {
-    logger.error("Error al crear publicación de comunidad", {
-      error: error.message,
-      stack: error.stack,
-      usuario: req.usuario.correo,
-      ip: req.ip,
-    });
-    res.status(500).json({
-      success: false,
-      msg: "Error al crear",
-    });
+    return next(error);
   }
 };
 
-const comunidadPut = async (req, res = response) => {
+const comunidadPut = async (req, res = response, next) => {
   try {
     if (req.usuario.rol !== "ADMIN_ROLE") {
       return res.status(403).json({
@@ -117,6 +102,7 @@ const comunidadPut = async (req, res = response) => {
 
     const editado = await Comunidad.findByIdAndUpdate(id, data, {
       new: true,
+      runValidators: true,
     }).populate("usuario", "nombre img rol");
 
     if (!editado) {
@@ -137,20 +123,11 @@ const comunidadPut = async (req, res = response) => {
       editado,
     });
   } catch (error) {
-    logger.error("Error al editar publicación de comunidad", {
-      error: error.message,
-      stack: error.stack,
-      comunidadId: req.params.id,
-      ip: req.ip,
-    });
-    res.status(500).json({
-      success: false,
-      msg: "Error al editar",
-    });
+    return next(error);
   }
 };
 
-const comunidadDelete = async (req, res = response) => {
+const comunidadDelete = async (req, res = response, next) => {
   try {
     if (req.usuario.rol !== "ADMIN_ROLE") {
       return res.status(403).json({
@@ -160,6 +137,13 @@ const comunidadDelete = async (req, res = response) => {
     }
 
     const eliminado = await Comunidad.findByIdAndDelete(req.params.id);
+
+    if (!eliminado) {
+      return res.status(404).json({
+        success: false,
+        msg: "Publicacion no encontrada",
+      });
+    }
 
     logger.warn("Publicación de comunidad eliminada", {
       comunidadId: req.params.id,
@@ -172,16 +156,7 @@ const comunidadDelete = async (req, res = response) => {
       eliminado,
     });
   } catch (error) {
-    logger.error("Error al eliminar publicación de comunidad", {
-      error: error.message,
-      stack: error.stack,
-      comunidadId: req.params.id,
-      ip: req.ip,
-    });
-    res.status(500).json({
-      success: false,
-      msg: "Error al eliminar",
-    });
+    return next(error);
   }
 };
 
