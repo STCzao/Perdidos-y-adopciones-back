@@ -8,19 +8,17 @@ const normalizarTexto = (texto) => {
   return texto.trim().toUpperCase();
 };
 
+// Escapar caracteres especiales de regex para evitar ReDoS
+const escaparRegex = (texto) => texto.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 // Obtener publicaciones públicas (todas excepto INACTIVO)
-const publicacionesGet = async (req, res = response) => {
+const publicacionesGet = async (req, res = response, next) => {
   try {
     const { page = 1, limit = 12, tipo, estado, search } = req.query;
 
-    const pageNum = Number(page);
-    let limitNum = Number(limit);
-    
-    // Validar límites de paginación
-    limitNum = Math.min(limitNum, 50); // Máximo 50 resultados por página
-    limitNum = Math.max(limitNum, 1);  // Mínimo 1 resultado
-    
-    const skip = (Math.max(pageNum, 1) - 1) * limitNum;
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 12, 1), 50);
+    const skip = (pageNum - 1) * limitNum;
 
     const query = {
       estado: { $ne: "INACTIVO" },
@@ -30,20 +28,30 @@ const publicacionesGet = async (req, res = response) => {
       query.tipo = normalizarTexto(tipo);
     }
 
+    const ESTADOS_PUBLICOS = [
+      "BUSCANDO A SU FAMILIA", "APARECIO SU FAMILIA",
+      "SE BUSCA", "YA APARECIO",
+      "EN BUSCA DE UN HOGAR", "ADOPTADO",
+    ];
     if (estado) {
-      query.estado = normalizarTexto(estado);
+      const estadoNorm = normalizarTexto(estado);
+      if (ESTADOS_PUBLICOS.includes(estadoNorm)) {
+        query.estado = estadoNorm;
+      }
+      // INACTIVO u otro valor inválido se ignora — el $ne ya aplica por defecto
     }
 
     if (search) {
+      const searchSeguro = escaparRegex(search.slice(0, 100));
       query.$or = [
-        { raza: { $regex: search, $options: "i" } },
-        { detalles: { $regex: search, $options: "i" } },
+        { raza: { $regex: searchSeguro, $options: "i" } },
+        { detalles: { $regex: searchSeguro, $options: "i" } },
       ];
       
       // Solo buscar en 'localidad' y 'lugar' si no es ADOPCION
       if (!tipo || tipo.toUpperCase() !== "ADOPCION") {
-        query.$or.push({ localidad: { $regex: search, $options: "i" } });
-        query.$or.push({ lugar: { $regex: search, $options: "i" } });
+        query.$or.push({ localidad: { $regex: searchSeguro, $options: "i" } });
+        query.$or.push({ lugar: { $regex: searchSeguro, $options: "i" } });
       }
     }
 
@@ -60,24 +68,16 @@ const publicacionesGet = async (req, res = response) => {
       success: true,
       publicaciones,
       total,
-      page: Math.max(pageNum, 1),
+      page: pageNum,
       totalPages: Math.ceil(total / limitNum),
     });
   } catch (error) {
-    logger.error("Error al obtener publicaciones", {
-      error: error.message,
-      stack: error.stack,
-      ip: req.ip,
-    });
-    res.status(500).json({
-      success: false,
-      msg: "Error al obtener publicaciones",
-    });
+    return next(error);
   }
 };
 
 // Obtener publicaciones de un usuario (para dashboard - incluye INACTIVO)
-const publicacionesUsuarioGet = async (req, res = response) => {
+const publicacionesUsuarioGet = async (req, res = response, next) => {
   try {
     const { id } = req.params;
 
@@ -101,21 +101,12 @@ const publicacionesUsuarioGet = async (req, res = response) => {
       publicaciones,
     });
   } catch (error) {
-    logger.error("Error al obtener publicaciones del usuario", {
-      error: error.message,
-      stack: error.stack,
-      usuarioId: id,
-      ip: req.ip,
-    });
-    res.status(500).json({
-      success: false,
-      msg: "Error al obtener publicaciones del usuario",
-    });
+    return next(error);
   }
 };
 
 // Obtener publicación individual (pública - excluye INACTIVO)
-const publicacionGet = async (req, res = response) => {
+const publicacionGet = async (req, res = response, next) => {
   try {
     const { id } = req.params;
     const publicacion = await Publicacion.findOne({
@@ -137,21 +128,12 @@ const publicacionGet = async (req, res = response) => {
       publicacion,
     });
   } catch (error) {
-    logger.error("Error al obtener la publicación", {
-      error: error.message,
-      stack: error.stack,
-      publicacionId: req.params.id,
-      ip: req.ip,
-    });
-    res.status(500).json({
-      success: false,
-      msg: "Error al obtener la publicación",
-    });
+    return next(error);
   }
 };
 
 // Crear publicación
-const publicacionesPost = async (req, res = response) => {
+const publicacionesPost = async (req, res = response, next) => {
   try {
     const { estado, usuario, ...body } = req.body;
 
@@ -165,30 +147,6 @@ const publicacionesPost = async (req, res = response) => {
       estadoDefecto = "BUSCANDO A SU FAMILIA";
     } else if (tipoNormalizado === "ADOPCION") {
       estadoDefecto = "EN BUSCA DE UN HOGAR";
-    }
-
-    // Validar campos requeridos según el tipo
-    const erroresValidacion = {};
-    
-    if (tipoNormalizado === "PERDIDO" || tipoNormalizado === "ENCONTRADO") {
-      if (!body.localidad) erroresValidacion.localidad = "La localidad es obligatoria para este tipo de publicación";
-      if (!body.lugar) erroresValidacion.lugar = "El lugar es obligatorio para este tipo de publicación";
-      if (!body.fecha) erroresValidacion.fecha = "La fecha es obligatoria para este tipo de publicación";
-    }
-    
-    if (tipoNormalizado === "ADOPCION") {
-      if (!body.afinidad) erroresValidacion.afinidad = "La afinidad es obligatoria para adopción";
-      if (!body.afinidadanimales) erroresValidacion.afinidadanimales = "La afinidad con animales es obligatoria para adopción";
-      if (!body.energia) erroresValidacion.energia = "El nivel de energía es obligatorio para adopción";
-      if (body.castrado === undefined || body.castrado === null) erroresValidacion.castrado = "El estado de castración es obligatorio para adopción";
-    }
-    
-    if (Object.keys(erroresValidacion).length > 0) {
-      return res.status(400).json({
-        success: false,
-        msg: "Error de validación",
-        errors: erroresValidacion,
-      });
     }
 
     // Normalizar todos los campos de texto (excepto whatsapp)
@@ -259,22 +217,12 @@ const publicacionesPost = async (req, res = response) => {
       });
     }
 
-    logger.error("Error al crear publicación", {
-      error: error.message,
-      stack: error.stack,
-      usuario: req.usuario.correo,
-      ip: req.ip,
-    });
-
-    res.status(500).json({
-      success: false,
-      msg: "Error al crear la publicación",
-    });
+    return next(error);
   }
 };
 
 // Actualizar publicación (solo dueño o admin)
-const publicacionesPut = async (req, res = response) => {
+const publicacionesPut = async (req, res = response, next) => {
   try {
     const { id } = req.params;
     const { _id, usuario, ...resto } = req.body;
@@ -330,6 +278,10 @@ const publicacionesPut = async (req, res = response) => {
       delete datosNormalizados.castrado;
     }
 
+    // 'tipo' y 'estado' no se pueden cambiar desde este endpoint
+    delete datosNormalizados.tipo;
+    delete datosNormalizados.estado;
+
     const publicacionActualizada = await Publicacion.findByIdAndUpdate(
       id,
       datosNormalizados,
@@ -342,13 +294,6 @@ const publicacionesPut = async (req, res = response) => {
       publicacion: publicacionActualizada,
     });
   } catch (error) {
-    logger.error("Error al actualizar publicación", {
-      error: error.message,
-      stack: error.stack,
-      publicacionId: req.params.id,
-      ip: req.ip,
-    });
-
     if (error.name === "ValidationError") {
       const errors = {};
       Object.keys(error.errors).forEach((key) => {
@@ -361,15 +306,12 @@ const publicacionesPut = async (req, res = response) => {
       });
     }
 
-    res.status(500).json({
-      success: false,
-      msg: "Error al actualizar la publicación",
-    });
+    return next(error);
   }
 };
 
 // Actualizar estado de publicación (solo dueño o admin)
-const publicacionesEstadoPut = async (req, res = response) => {
+const publicacionesEstadoPut = async (req, res = response, next) => {
   try {
     const { id } = req.params;
     const { estado } = req.body;
@@ -415,21 +357,12 @@ const publicacionesEstadoPut = async (req, res = response) => {
       publicacion: publicacionActualizada,
     });
   } catch (error) {
-    logger.error("Error al actualizar estado de publicación", {
-      error: error.message,
-      stack: error.stack,
-      publicacionId: id,
-      ip: req.ip,
-    });
-    res.status(500).json({
-      success: false,
-      msg: "Error al actualizar el estado",
-    });
+    return next(error);
   }
 };
 
 // Eliminar publicación (cambiar estado a INACTIVO)
-const publicacionesDelete = async (req, res = response) => {
+const publicacionesDelete = async (req, res = response, next) => {
   try {
     const { id } = req.params;
 
@@ -468,21 +401,12 @@ const publicacionesDelete = async (req, res = response) => {
       publicacion: publicacionEliminada,
     });
   } catch (error) {
-    logger.error("Error al eliminar publicación", {
-      error: error.message,
-      stack: error.stack,
-      publicacionId: id,
-      ip: req.ip,
-    });
-    res.status(500).json({
-      success: false,
-      msg: "Error al eliminar la publicación",
-    });
+    return next(error);
   }
 };
 
 // Obtener contacto de la publicación (requiere autenticación)
-const obtenerContactoPublicacion = async (req, res = response) => {
+const obtenerContactoPublicacion = async (req, res = response, next) => {
   try {
     const { id } = req.params;
 
@@ -504,32 +428,18 @@ const obtenerContactoPublicacion = async (req, res = response) => {
       whatsapp: publicacion.whatsapp,
     });
   } catch (error) {
-    logger.error("Error al obtener información de contacto", {
-      error: error.message,
-      stack: error.stack,
-      publicacionId: req.params.id,
-      ip: req.ip,
-    });
-    res.status(500).json({
-      success: false,
-      msg: "Error al obtener información de contacto",
-    });
+    return next(error);
   }
 };
 
 // Admin: ver todas las publicaciones (incluyendo INACTIVO)
-const publicacionesAdminGet = async (req, res = response) => {
+const publicacionesAdminGet = async (req, res = response, next) => {
   try {
     const { estado, page = 1, limit = 12 } = req.query;
 
-    const pageNum = Number(page);
-    let limitNum = Number(limit);
-    
-    // Validar límites de paginación
-    limitNum = Math.min(limitNum, 50); // Máximo 50 resultados por página
-    limitNum = Math.max(limitNum, 1);  // Mínimo 1 resultado
-    
-    const skip = (Math.max(pageNum, 1) - 1) * limitNum;
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 12, 1), 50);
+    const skip = (pageNum - 1) * limitNum;
 
     const query = {};
     if (estado) {
@@ -548,20 +458,12 @@ const publicacionesAdminGet = async (req, res = response) => {
     res.json({
       success: true,
       total,
-      page: Math.max(pageNum, 1),
+      page: pageNum,
       totalPages: Math.ceil(total / limitNum),
       publicaciones,
     });
   } catch (error) {
-    logger.error("Error al obtener publicaciones (Admin)", {
-      error: error.message,
-      stack: error.stack,
-      ip: req.ip,
-    });
-    res.status(500).json({
-      success: false,
-      msg: "Error al obtener publicaciones",
-    });
+    return next(error);
   }
 };
 

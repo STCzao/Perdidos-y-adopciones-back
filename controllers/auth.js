@@ -3,12 +3,12 @@ const bcryptjs = require("bcryptjs");
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const Usuario = require("../models/usuario");
-const { generarJWT, generarAccessToken, generarRefreshToken } = require("../helpers/generar-jwt");
+const { generarAccessToken, generarRefreshToken } = require("../helpers/generar-jwt");
 const { enviarEmail } = require("../helpers/enviar-mails");
 const logger = require("../helpers/logger");
 
 // ------------------------- LOGIN -------------------------
-const login = async (req, res = response) => {
+const login = async (req, res = response, next) => {
   const { correo, password } = req.body;
 
   try {
@@ -20,6 +20,7 @@ const login = async (req, res = response) => {
       });
       
       return res.status(400).json({
+        success: false,
         msg: "Correo o contraseña incorrectos",
         errors: {
           correo: "Correo o contraseña incorrectos",
@@ -36,6 +37,7 @@ const login = async (req, res = response) => {
       });
       
       return res.status(400).json({
+        success: false,
         msg: "Correo o contraseña incorrectos",
         errors: {
           correo: "Correo o contraseña incorrectos",
@@ -79,42 +81,41 @@ const login = async (req, res = response) => {
       refreshToken,
     });
   } catch (error) {
-    logger.error("Error en login", {
-      error: error.message,
-      stack: error.stack,
-      correo,
-      ip: req.ip,
-    });
-    res.status(500).json({ msg: "Error en el servidor" });
+    return next(error);
   }
 };
 
 // ----------------- FORGOT PASSWORD ----------------------
-const forgotPassword = async (req, res = response) => {
+const forgotPassword = async (req, res = response, next) => {
   const { correo } = req.body;
+
+  // Respuesta genérica siempre — nunca revelar si el correo existe o no.
+  // Esto previene user enumeration: un atacante no puede saber qué correos
+  // están registrados usando este endpoint como scanner.
+  const RESPUESTA_GENERICA = {
+    success: true,
+    msg: "Si el correo está registrado, recibirás un enlace en los próximos minutos. Revisá también la carpeta de Spam.",
+  };
 
   try {
     const usuario = await Usuario.findOne({ correo });
+
     if (!usuario) {
+      // Log interno del intento — el cliente recibe la misma respuesta que si existiera
       logger.warn("Solicitud de recuperación para correo no registrado", {
         correo,
         ip: req.ip,
       });
-      
-      return res.status(400).json({
-        msg: "No existe un usuario con ese correo",
-        errors: {
-          correo: "No existe un usuario con ese correo",
-        },
-      });
+      // Respuesta idéntica al caso exitoso — no se puede distinguir desde afuera
+      return res.status(200).json(RESPUESTA_GENERICA);
     }
 
     const token = crypto.randomBytes(32).toString("hex");
-    usuario.resetToken = token;
-    usuario.resetTokenExp = Date.now() + 3600000; // 1 hora
-    await usuario.save();
-
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${token}`;
+
+    // Enviar email ANTES de persistir el token.
+    // Si el envío falla, next(error) se dispara sin que quede un token
+    // huérfano en la BD que bloquee futuros intentos.
     await enviarEmail(
       usuario.correo,
       "Recuperar contraseña",
@@ -124,28 +125,24 @@ const forgotPassword = async (req, res = response) => {
        <p>Este enlace expirará en 1 hora.</p>`
     );
 
+    // Solo persistir si el email fue enviado exitosamente
+    usuario.resetToken = token;
+    usuario.resetTokenExp = Date.now() + 3600000; // 1 hora
+    await usuario.save();
+
     logger.info("Email de recuperación enviado", {
       correo,
       ip: req.ip,
     });
 
-    res.json({
-      success: true,
-      msg: "Se envió un correo para restablecer la contraseña (verifica la casilla de Spam)",
-    });
+    res.status(200).json(RESPUESTA_GENERICA);
   } catch (error) {
-    logger.error("Error en forgotPassword", {
-      error: error.message,
-      stack: error.stack,
-      correo,
-      ip: req.ip,
-    });
-    res.status(500).json({ msg: "Error en el servidor" });
+    return next(error);
   }
 };
 
 // ----------------- RESET PASSWORD -----------------------
-const resetPassword = async (req, res = response) => {
+const resetPassword = async (req, res = response, next) => {
   const { token } = req.params;
   const { password } = req.body;
 
@@ -157,33 +154,18 @@ const resetPassword = async (req, res = response) => {
 
     if (!usuario) {
       logger.warn("Intento de reset con token inválido o expirado", {
-        token,
+        tokenHint: token.slice(0, 8) + "...",
         ip: req.ip,
       });
       
       return res.status(400).json({
+        success: false,
         msg: "Token inválido o expirado",
         errors: {
           password: "Token inválido o expirado",
         },
       });
     }
-
-    if (password.length < 6)
-      return res.status(400).json({
-        msg: "La contraseña debe tener al menos 6 caracteres",
-        errors: {
-          password: "La contraseña debe tener al menos 6 caracteres",
-        },
-      });
-
-    if (password.length > 15)
-      return res.status(400).json({
-        msg: "La contraseña no puede tener más de 15 caracteres",
-        errors: {
-          password: "La contraseña no puede tener más de 15 caracteres",
-        },
-      });
 
     const salt = bcryptjs.genSaltSync(10);
     usuario.password = bcryptjs.hashSync(password, salt);
@@ -205,17 +187,12 @@ const resetPassword = async (req, res = response) => {
       msg: "Contraseña actualizada correctamente" 
     });
   } catch (error) {
-    logger.error("Error en resetPassword", {
-      error: error.message,
-      stack: error.stack,
-      ip: req.ip,
-    });
-    res.status(500).json({ msg: "Error en el servidor" });
+    return next(error);
   }
 };
 
 // ----------------- REFRESH TOKEN -----------------------
-const refreshToken = async (req, res = response) => {
+const refreshToken = async (req, res = response, next) => {
   const { refreshToken } = req.body;
 
   try {
@@ -332,26 +309,22 @@ const refreshToken = async (req, res = response) => {
       refreshToken: newRefreshToken,
     });
   } catch (error) {
-    logger.error("Error al renovar token", {
-      error: error.message,
-      stack: error.stack,
-      ip: req.ip,
-    });
-
-    res.status(500).json({
-      success: false,
-      msg: "Error al renovar token",
-    });
+    return next(error);
   }
 };
 
 // ----------------- LOGOUT -----------------------
-const logout = async (req, res = response) => {
+const logout = async (req, res = response, next) => {
   try {
     const { refreshToken } = req.body;
     const usuario = await Usuario.findById(req.usuario._id);
 
-    if (refreshToken && usuario) {
+    if (!usuario) {
+      // El token JWT era válido pero la cuenta ya no existe — cerrar sesión igualmente
+      return res.json({ success: true, msg: "Sesión cerrada correctamente" });
+    }
+
+    if (refreshToken) {
       // Eliminar solo el refresh token del dispositivo actual
       usuario.refreshTokens = usuario.refreshTokens.filter(
         (rt) => rt.token !== refreshToken
@@ -369,19 +342,18 @@ const logout = async (req, res = response) => {
       msg: "Sesión cerrada correctamente",
     });
   } catch (error) {
-    logger.error("Error en logout", {
-      error: error.message,
-      stack: error.stack,
-      ip: req.ip,
-    });
-    res.status(500).json({ success: false, msg: "Error al cerrar sesión" });
+    return next(error);
   }
 };
 
 // ----------------- LOGOUT ALL -----------------------
-const logoutAll = async (req, res = response) => {
+const logoutAll = async (req, res = response, next) => {
   try {
     const usuario = await Usuario.findById(req.usuario._id);
+
+    if (!usuario) {
+      return res.json({ success: true, msg: "Sesión cerrada en todos los dispositivos" });
+    }
 
     usuario.refreshTokens = [];
     await usuario.save();
@@ -396,12 +368,7 @@ const logoutAll = async (req, res = response) => {
       msg: "Sesión cerrada en todos los dispositivos",
     });
   } catch (error) {
-    logger.error("Error en logoutAll", {
-      error: error.message,
-      stack: error.stack,
-      ip: req.ip,
-    });
-    res.status(500).json({ success: false, msg: "Error al cerrar sesiones" });
+    return next(error);
   }
 };
 

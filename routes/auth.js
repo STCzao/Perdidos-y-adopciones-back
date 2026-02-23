@@ -36,6 +36,7 @@ router.post(
   "/reset-password/:token",
   [
     check("password", "La contraseña es obligatoria").not().isEmpty(),
+    check("password", "La contraseña debe tener entre 6 y 15 caracteres").isLength({ min: 6, max: 15 }),
     validarCampos,
   ],
   resetPassword

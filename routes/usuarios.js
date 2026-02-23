@@ -33,7 +33,7 @@ router.post(
       max: 15,
     }),
     check("correo", "El correo debe ser válido").isEmail(),
-    check("telefono", "El teléfono es obligatorio").not().isEmpty(),
+    check("telefono", "El teléfono debe contener entre 7 y 15 dígitos").matches(/^[0-9]{7,15}$/),
     validarCampos,
   ],
   usuariosPost
@@ -95,6 +95,7 @@ router.put(
     validarJWT,
     esAdminRole,
     check("id", "No es un ID válido").isMongoId(),
+    check("estado", "El estado debe ser un valor booleano").isBoolean().toBoolean(),
     validarCampos,
   ],
   cambiarUsuarioEstado

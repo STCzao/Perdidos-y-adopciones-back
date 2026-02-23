@@ -1,5 +1,6 @@
 const { Schema, model } = require("mongoose");
 const { LOCALIDADES_TUCUMAN } = require("../helpers/localidades");
+const { RAZAS } = require("../helpers/razas");
 
 const PublicacionSchema = Schema({
   tipo: {
@@ -36,7 +37,7 @@ const PublicacionSchema = Schema({
   raza: {
     type: String,
     required: [true, "La raza es obligatoria"],
-    maxlength: [40, "La raza no puede tener más de 40 caracteres"],
+    enum: RAZAS,
   },
   localidad: {
     type: String,
