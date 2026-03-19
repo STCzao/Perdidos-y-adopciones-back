@@ -61,11 +61,12 @@ const errorHandler = (err, req, res, next) => {
     });
   }
 
-  // Error genérico del servidor
+  // Error genérico del servidor (incluye AppError con statusCode y errors)
   const statusCode = err.statusCode || 500;
   res.status(statusCode).json({
     success: false,
     msg: err.message || "Error interno del servidor",
+    ...(err.errors && { errors: err.errors }),
     ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
   });
 };

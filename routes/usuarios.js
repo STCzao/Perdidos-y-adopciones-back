@@ -27,10 +27,10 @@ router.post(
     }),
     check(
       "password",
-      "La contraseña debe tener entre 6 y 15 caracteres"
+      "La contraseña debe tener entre 8 y 64 caracteres"
     ).isLength({
-      min: 6,
-      max: 15,
+      min: 8,
+      max: 64,
     }),
     check("correo", "El correo debe ser válido").isEmail(),
     check("telefono", "El teléfono debe contener entre 7 y 15 dígitos").matches(/^[0-9]{7,15}$/),
@@ -81,9 +81,9 @@ router.put(
     check("nombre", "El nombre debe tener entre 3 y 40 caracteres")
       .optional()
       .isLength({ min: 3, max: 40 }),
-    check("password", "La contraseña debe tener entre 6 y 15 caracteres")
+    check("password", "La contraseña debe tener entre 8 y 64 caracteres")
       .optional()
-      .isLength({ min: 6, max: 15 }),
+      .isLength({ min: 8, max: 64 }),
     validarCampos,
   ],
   usuariosPut

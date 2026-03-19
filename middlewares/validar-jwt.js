@@ -1,16 +1,13 @@
-const { response } = require("express");
 const jwt = require("jsonwebtoken");
 const Usuario = require("../models/usuario");
 const logger = require("../helpers/logger");
+const AppError = require("../helpers/AppError");
 
-const validarJWT = async (req, res = response, next) => {
+const validarJWT = async (req, res, next) => {
   const token = req.header("x-token");
 
   if (!token) {
-    return res.status(401).json({
-      success: false,
-      msg: "No hay token en la petición",
-    });
+    return next(new AppError("No hay token en la petición", 401));
   }
 
   try {
@@ -19,17 +16,11 @@ const validarJWT = async (req, res = response, next) => {
     const usuarioDB = await Usuario.findById(uid);
 
     if (!usuarioDB) {
-      return res.status(401).json({
-        success: false,
-        msg: "Usuario no existe en DB - Token inválido",
-      });
+      return next(new AppError("Usuario no existe en DB - Token inválido", 401));
     }
 
     if (!usuarioDB.estado) {
-      return res.status(401).json({
-        success: false,
-        msg: "Usuario inhabilitado - Token inválido",
-      });
+      return next(new AppError("Usuario inhabilitado - Token inválido", 401));
     }
 
     req.usuario = usuarioDB;
@@ -40,11 +31,7 @@ const validarJWT = async (req, res = response, next) => {
       ip: req.ip,
       path: req.path,
     });
-    
-    return res.status(401).json({
-      success: false,
-      msg: "Token no válido",
-    });
+    next(error); // JsonWebTokenError y TokenExpiredError manejados en error-handler
   }
 };
 

@@ -22,7 +22,7 @@ const generarAccessToken = (uid = "") => {
             stack: err.stack,
             uid,
           });
-          reject("No se pudo generar el access token");
+          reject(new Error("No se pudo generar el access token"));
         } else {
           resolve(token);
         }
@@ -52,7 +52,7 @@ const generarRefreshToken = (uid = "") => {
             stack: err.stack,
             uid,
           });
-          reject("No se pudo generar el refresh token");
+          reject(new Error("No se pudo generar el refresh token"));
         } else {
           resolve(token);
         }
