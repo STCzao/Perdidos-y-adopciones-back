@@ -1,162 +1,60 @@
-const { response } = require("express");
-const Comunidad = require("../models/comunidad");
-const logger = require("../helpers/logger");
+const comunidadService = require("../service/comunidad");
 
-const normalizar = (t) => (typeof t === "string" ? t.trim().toUpperCase() : t);
-
-const comunidadGet = async (req, res = response, next) => {
+const comunidadGet = async (req, res, next) => {
   try {
-    const comunidades = await Comunidad.find()
-      .populate("usuario", "nombre img rol")
-      .sort({ fechaCreacion: -1 });
-
-    res.json({
-      success: true,
-      comunidades,
-    });
+    const result = await comunidadService.getComunidades();
+    res.json({ success: true, ...result });
   } catch (error) {
-    return next(error);
+    next(error);
   }
 };
 
-const comunidadGetById = async (req, res = response, next) => {
+const comunidadGetById = async (req, res, next) => {
   try {
-    const post = await Comunidad.findById(req.params.id).populate(
-      "usuario",
-      "nombre img rol"
-    );
-
-    if (!post) {
-      return res.status(404).json({
-        success: false,
-        msg: "Publicacion no encontrada",
-      });
-    }
-
-    res.json({
-      success: true,
-      post,
-    });
+    const result = await comunidadService.getComunidadById({ id: req.params.id });
+    res.json({ success: true, ...result });
   } catch (error) {
-    return next(error);
+    next(error);
   }
 };
 
-const comunidadPost = async (req, res = response, next) => {
+const comunidadPost = async (req, res, next) => {
   try {
-    if (req.usuario.rol !== "ADMIN_ROLE") {
-      return res.status(403).json({
-        success: false,
-        msg: "Solo el administrador puede crear",
-      });
-    }
-
-    const { titulo, contenido, categoria, img } = req.body;
-
-    const data = {
-      titulo: normalizar(titulo),
-      contenido,
-      categoria: normalizar(categoria),
-      img: img ? img.toLowerCase() : undefined,
-      usuario: req.usuario._id,
-    };
-
-    const comunidad = new Comunidad(data);
-    const comunidadDB = await comunidad.save();
-    await comunidadDB.populate("usuario", "nombre img rol");
-
-    logger.info("Publicación de comunidad creada", {
-      titulo: data.titulo,
-      categoria: data.categoria,
-      usuario: req.usuario.correo,
+    const result = await comunidadService.crearComunidad({
+      body: req.body,
+      usuarioActual: req.usuario,
       ip: req.ip,
     });
-
-    res.status(201).json({
-      success: true,
-      comunidad: comunidadDB,
-    });
+    res.status(201).json({ success: true, ...result });
   } catch (error) {
-    return next(error);
+    next(error);
   }
 };
 
-const comunidadPut = async (req, res = response, next) => {
+const comunidadPut = async (req, res, next) => {
   try {
-    if (req.usuario.rol !== "ADMIN_ROLE") {
-      return res.status(403).json({
-        success: false,
-        msg: "Solo el administrador puede editar",
-      });
-    }
-
-    const { id } = req.params;
-    const { titulo, contenido, categoria, img } = req.body;
-
-    const data = {};
-
-    if (titulo) data.titulo = titulo.trim().toUpperCase();
-    if (contenido) data.contenido = contenido;
-    if (categoria) data.categoria = categoria.trim().toUpperCase();
-    if (img) data.img = img.toLowerCase();
-
-    const editado = await Comunidad.findByIdAndUpdate(id, data, {
-      new: true,
-      runValidators: true,
-    }).populate("usuario", "nombre img rol");
-
-    if (!editado) {
-      return res.status(404).json({
-        success: false,
-        msg: "Publicacion no encontrada",
-      });
-    }
-
-    logger.info("Publicación de comunidad editada", {
-      comunidadId: id,
-      usuario: req.usuario.correo,
+    const result = await comunidadService.actualizarComunidad({
+      id: req.params.id,
+      body: req.body,
+      usuarioActual: req.usuario,
       ip: req.ip,
     });
-
-    res.json({
-      success: true,
-      editado,
-    });
+    res.json({ success: true, ...result });
   } catch (error) {
-    return next(error);
+    next(error);
   }
 };
 
-const comunidadDelete = async (req, res = response, next) => {
+const comunidadDelete = async (req, res, next) => {
   try {
-    if (req.usuario.rol !== "ADMIN_ROLE") {
-      return res.status(403).json({
-        success: false,
-        msg: "Solo el administrador puede eliminar",
-      });
-    }
-
-    const eliminado = await Comunidad.findByIdAndDelete(req.params.id);
-
-    if (!eliminado) {
-      return res.status(404).json({
-        success: false,
-        msg: "Publicacion no encontrada",
-      });
-    }
-
-    logger.warn("Publicación de comunidad eliminada", {
-      comunidadId: req.params.id,
-      eliminadaPor: req.usuario.correo,
+    const result = await comunidadService.eliminarComunidad({
+      id: req.params.id,
+      usuarioActual: req.usuario,
       ip: req.ip,
     });
-
-    res.json({
-      success: true,
-      eliminado,
-    });
+    res.json({ success: true, ...result });
   } catch (error) {
-    return next(error);
+    next(error);
   }
 };
 

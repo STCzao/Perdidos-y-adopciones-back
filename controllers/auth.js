@@ -1,374 +1,81 @@
-const { response } = require("express");
-const bcryptjs = require("bcryptjs");
-const crypto = require("crypto");
-const jwt = require("jsonwebtoken");
-const Usuario = require("../models/usuario");
-const { generarAccessToken, generarRefreshToken } = require("../helpers/generar-jwt");
-const { enviarEmail } = require("../helpers/enviar-mails");
-const logger = require("../helpers/logger");
+const authService = require("../service/auth");
 
-// ------------------------- LOGIN -------------------------
-const login = async (req, res = response, next) => {
-  const { correo, password } = req.body;
-
+const login = async (req, res, next) => {
   try {
-    const usuario = await Usuario.findOne({ correo });
-    if (!usuario || !usuario.estado) {
-      logger.warn("Intento de login fallido - Usuario no existe o inactivo", {
-        correo,
-        ip: req.ip,
-      });
-      
-      return res.status(400).json({
-        success: false,
-        msg: "Correo o contraseña incorrectos",
-        errors: {
-          correo: "Correo o contraseña incorrectos",
-          password: "Correo o contraseña incorrectos",
-        },
-      });
-    }
-
-    const validPassword = bcryptjs.compareSync(password, usuario.password);
-    if (!validPassword) {
-      logger.warn("Intento de login fallido - Contraseña incorrecta", {
-        correo,
-        ip: req.ip,
-      });
-      
-      return res.status(400).json({
-        success: false,
-        msg: "Correo o contraseña incorrectos",
-        errors: {
-          correo: "Correo o contraseña incorrectos",
-          password: "Correo o contraseña incorrectos",
-        },
-      });
-    }
-
-    // Generar access token (30min) y refresh token (30 días)
-    const [accessToken, refreshToken] = await Promise.all([
-      generarAccessToken(usuario.id),
-      generarRefreshToken(usuario.id),
-    ]);
-
-    // Guardar refresh token en DB
-    usuario.refreshTokens = usuario.refreshTokens || [];
-    usuario.refreshTokens.push({
-      token: refreshToken,
-      device: req.headers["user-agent"] || "Unknown",
+    const result = await authService.login({
+      correo: req.body.correo,
+      password: req.body.password,
+      userAgent: req.headers["user-agent"],
       ip: req.ip,
     });
-
-    // Limitar a 5 dispositivos activos máximo
-    if (usuario.refreshTokens.length > 5) {
-      usuario.refreshTokens = usuario.refreshTokens.slice(-5);
-    }
-
-    await usuario.save();
-    
-    logger.info("Login exitoso", {
-      correo,
-      nombre: usuario.nombre,
-      ip: req.ip,
-      dispositivosActivos: usuario.refreshTokens.length,
-    });
-    
-    res.json({ 
-      success: true,
-      usuario, 
-      accessToken,
-      refreshToken,
-    });
+    res.json({ success: true, ...result });
   } catch (error) {
-    return next(error);
+    next(error);
   }
 };
 
-// ----------------- FORGOT PASSWORD ----------------------
-const forgotPassword = async (req, res = response, next) => {
-  const { correo } = req.body;
-
-  // Respuesta genérica siempre — nunca revelar si el correo existe o no.
-  // Esto previene user enumeration: un atacante no puede saber qué correos
-  // están registrados usando este endpoint como scanner.
-  const RESPUESTA_GENERICA = {
-    success: true,
-    msg: "Si el correo está registrado, recibirás un enlace en los próximos minutos. Revisá también la carpeta de Spam.",
-  };
-
+const forgotPassword = async (req, res, next) => {
   try {
-    const usuario = await Usuario.findOne({ correo });
-
-    if (!usuario) {
-      // Log interno del intento — el cliente recibe la misma respuesta que si existiera
-      logger.warn("Solicitud de recuperación para correo no registrado", {
-        correo,
-        ip: req.ip,
-      });
-      // Respuesta idéntica al caso exitoso — no se puede distinguir desde afuera
-      return res.status(200).json(RESPUESTA_GENERICA);
-    }
-
-    const token = crypto.randomBytes(32).toString("hex");
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${token}`;
-
-    // Enviar email ANTES de persistir el token.
-    // Si el envío falla, next(error) se dispara sin que quede un token
-    // huérfano en la BD que bloquee futuros intentos.
-    await enviarEmail(
-      usuario.correo,
-      "Recuperar contraseña",
-      `<p>Hola ${usuario.nombre},</p>
-       <p>Haz click en el siguiente enlace para restablecer tu contraseña:</p>
-       <a href="${resetUrl}" target="_blank">${resetUrl}</a>
-       <p>Este enlace expirará en 1 hora.</p>`
-    );
-
-    // Solo persistir si el email fue enviado exitosamente
-    usuario.resetToken = token;
-    usuario.resetTokenExp = Date.now() + 3600000; // 1 hora
-    await usuario.save();
-
-    logger.info("Email de recuperación enviado", {
-      correo,
+    const result = await authService.forgotPassword({
+      correo: req.body.correo,
       ip: req.ip,
     });
-
-    res.status(200).json(RESPUESTA_GENERICA);
+    res.status(200).json({ success: true, ...result });
   } catch (error) {
-    return next(error);
+    next(error);
   }
 };
 
-// ----------------- RESET PASSWORD -----------------------
-const resetPassword = async (req, res = response, next) => {
-  const { token } = req.params;
-  const { password } = req.body;
-
+const resetPassword = async (req, res, next) => {
   try {
-    const usuario = await Usuario.findOne({
-      resetToken: token,
-      resetTokenExp: { $gt: Date.now() },
-    });
-
-    if (!usuario) {
-      logger.warn("Intento de reset con token inválido o expirado", {
-        tokenHint: token.slice(0, 8) + "...",
-        ip: req.ip,
-      });
-      
-      return res.status(400).json({
-        success: false,
-        msg: "Token inválido o expirado",
-        errors: {
-          password: "Token inválido o expirado",
-        },
-      });
-    }
-
-    const salt = bcryptjs.genSaltSync(10);
-    usuario.password = bcryptjs.hashSync(password, salt);
-
-    // ✅ PARCHE: Invalidar todos los refresh tokens por seguridad
-    usuario.refreshTokens = [];
-    usuario.resetToken = undefined;
-    usuario.resetTokenExp = undefined;
-    await usuario.save();
-
-    logger.info("Contraseña restablecida exitosamente", {
-      correo: usuario.correo,
+    const result = await authService.resetPassword({
+      token: req.params.token,
+      password: req.body.password,
       ip: req.ip,
-      tokensInvalidados: true,
     });
-
-    res.json({ 
-      success: true,
-      msg: "Contraseña actualizada correctamente" 
-    });
+    res.json({ success: true, ...result });
   } catch (error) {
-    return next(error);
+    next(error);
   }
 };
 
-// ----------------- REFRESH TOKEN -----------------------
-const refreshToken = async (req, res = response, next) => {
-  const { refreshToken } = req.body;
-
+const refreshToken = async (req, res, next) => {
   try {
-    // 1. Validar que viene el token
-    if (!refreshToken) {
-      return res.status(401).json({
-        success: false,
-        msg: "Refresh token no proporcionado",
-      });
-    }
-
-    // 2. Verificar firma del token
-    let uid;
-    try {
-      const { uid: userId, type } = jwt.verify(
-        refreshToken,
-        process.env.REFRESH_SECRET
-      );
-
-      if (type !== "refresh") {
-        throw new Error("Token inválido");
-      }
-
-      uid = userId;
-    } catch (error) {
-      logger.warn("Intento de refresh con token inválido", {
-        ip: req.ip,
-        error: error.message,
-      });
-
-      return res.status(401).json({
-        success: false,
-        msg: "Refresh token inválido o expirado",
-      });
-    }
-
-    // 3. Buscar usuario y verificar que el token existe en DB
-    const usuario = await Usuario.findById(uid);
-
-    if (!usuario) {
-      return res.status(401).json({
-        success: false,
-        msg: "Usuario no encontrado",
-      });
-    }
-
-    // ✅ PARCHE: Validar estado y limpiar tokens si está deshabilitado
-    if (!usuario.estado) {
-      usuario.refreshTokens = [];
-      await usuario.save();
-      
-      logger.warn("Intento de refresh con usuario deshabilitado", {
-        correo: usuario.correo,
-        ip: req.ip,
-      });
-      
-      return res.status(401).json({
-        success: false,
-        msg: "Usuario deshabilitado. Tokens invalidados.",
-      });
-    }
-
-    const tokenExiste = usuario.refreshTokens?.some(
-      (rt) => rt.token === refreshToken
-    );
-
-    if (!tokenExiste) {
-      const tokensActuales = usuario.refreshTokens?.length || 0;
-      
-      logger.warn("Refresh token no encontrado en DB", {
-        correo: usuario.correo,
-        ip: req.ip,
-        tokensActuales,
-        motivo: tokensActuales === 0 ? "Usuario cerró sesión previamente" : "Token inválido o expirado - posible robo"
-      });
-
-      // Invalidar TODOS los refresh tokens por seguridad
-      usuario.refreshTokens = [];
-      await usuario.save();
-
-      return res.status(401).json({
-        success: false,
-        msg: "Refresh token inválido. Por seguridad, cierra sesión en todos tus dispositivos.",
-      });
-    }
-
-    // 4. Generar NUEVOS tokens (Token Rotation)
-    const [newAccessToken, newRefreshToken] = await Promise.all([
-      generarAccessToken(usuario.id),
-      generarRefreshToken(usuario.id),
-    ]);
-
-    // 5. Eliminar refresh token viejo y agregar nuevo
-    usuario.refreshTokens = usuario.refreshTokens.filter(
-      (rt) => rt.token !== refreshToken
-    );
-
-    usuario.refreshTokens.push({
-      token: newRefreshToken,
-      device: req.headers["user-agent"] || "Unknown",
+    const result = await authService.renovarToken({
+      refreshToken: req.body.refreshToken,
+      userAgent: req.headers["user-agent"],
       ip: req.ip,
     });
-
-    await usuario.save();
-
-    logger.info("Token renovado exitosamente", {
-      correo: usuario.correo,
-      ip: req.ip,
-    });
-
-    res.json({
-      success: true,
-      accessToken: newAccessToken,
-      refreshToken: newRefreshToken,
-    });
+    res.json({ success: true, ...result });
   } catch (error) {
-    return next(error);
+    next(error);
   }
 };
 
-// ----------------- LOGOUT -----------------------
-const logout = async (req, res = response, next) => {
+const logout = async (req, res, next) => {
   try {
-    const { refreshToken } = req.body;
-    const usuario = await Usuario.findById(req.usuario._id);
-
-    if (!usuario) {
-      // El token JWT era válido pero la cuenta ya no existe — cerrar sesión igualmente
-      return res.json({ success: true, msg: "Sesión cerrada correctamente" });
-    }
-
-    if (refreshToken) {
-      // Eliminar solo el refresh token del dispositivo actual
-      usuario.refreshTokens = usuario.refreshTokens.filter(
-        (rt) => rt.token !== refreshToken
-      );
-      await usuario.save();
-    }
-
-    logger.info("Logout exitoso", {
+    const result = await authService.logout({
+      userId: req.usuario._id,
+      refreshToken: req.body.refreshToken,
       correo: req.usuario.correo,
       ip: req.ip,
     });
-
-    res.json({
-      success: true,
-      msg: "Sesión cerrada correctamente",
-    });
+    res.json({ success: true, ...result });
   } catch (error) {
-    return next(error);
+    next(error);
   }
 };
 
-// ----------------- LOGOUT ALL -----------------------
-const logoutAll = async (req, res = response, next) => {
+const logoutAll = async (req, res, next) => {
   try {
-    const usuario = await Usuario.findById(req.usuario._id);
-
-    if (!usuario) {
-      return res.json({ success: true, msg: "Sesión cerrada en todos los dispositivos" });
-    }
-
-    usuario.refreshTokens = [];
-    await usuario.save();
-
-    logger.warn("Logout de todos los dispositivos", {
+    const result = await authService.logoutAll({
+      userId: req.usuario._id,
       correo: req.usuario.correo,
       ip: req.ip,
     });
-
-    res.json({
-      success: true,
-      msg: "Sesión cerrada en todos los dispositivos",
-    });
+    res.json({ success: true, ...result });
   } catch (error) {
-    return next(error);
+    next(error);
   }
 };
 

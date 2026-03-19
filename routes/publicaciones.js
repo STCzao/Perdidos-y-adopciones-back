@@ -211,6 +211,7 @@ router.put(
   [
     validarJWT,
     check("id", "No es un ID válido").isMongoId(),
+    check("estado", "El estado es obligatorio").not().isEmpty(),
     check("estado").isIn([
       "YA APARECIO",
       "EN BUSCA DE UN HOGAR",
@@ -219,7 +220,7 @@ router.put(
       "BUSCANDO A SU FAMILIA",
       "APARECIO SU FAMILIA",
       "SE BUSCA",
-    ]),
+    ]).withMessage("Estado no válido"),
     validarCampos,
   ],
   publicacionesEstadoPut,
