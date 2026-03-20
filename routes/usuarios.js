@@ -27,9 +27,9 @@ router.post(
     }),
     check(
       "password",
-      "La contraseña debe tener entre 8 y 64 caracteres"
+      "La contraseña debe tener entre 6 y 64 caracteres"
     ).isLength({
-      min: 8,
+      min: 6,
       max: 64,
     }),
     check("correo", "El correo debe ser válido").isEmail(),
@@ -81,9 +81,9 @@ router.put(
     check("nombre", "El nombre debe tener entre 3 y 40 caracteres")
       .optional()
       .isLength({ min: 3, max: 40 }),
-    check("password", "La contraseña debe tener entre 8 y 64 caracteres")
+    check("password", "La contraseña debe tener entre 6 y 64 caracteres")
       .optional()
-      .isLength({ min: 8, max: 64 }),
+      .isLength({ min: 6, max: 64 }),
     validarCampos,
   ],
   usuariosPut
