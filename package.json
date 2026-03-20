@@ -7,7 +7,12 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "test": "jest --runInBand",
+    "test:unit": "jest tests/unit --coverage",
+    "test:integration": "jest tests/integration --runInBand",
+    "test:e2e": "jest tests/e2e --runInBand",
+    "test:coverage": "jest --coverage --runInBand"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
@@ -25,6 +30,9 @@
     "winston": "^3.19.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10"
+    "jest": "^30.3.0",
+    "mongodb-memory-server": "^11.0.1",
+    "nodemon": "^3.1.10",
+    "supertest": "^7.2.2"
   }
 }
