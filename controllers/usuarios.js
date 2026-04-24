@@ -102,6 +102,22 @@ const miPerfilPut = async (req, res, next) => {
     const result = await usuarioService.actualizarMiPerfil({
       userId: req.usuario._id,
       datos: req.body,
+      ip: req.ip,
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const miPerfilPasswordPatch = async (req, res, next) => {
+  try {
+    const result = await usuarioService.cambiarPasswordMiPerfil({
+      userId: req.usuario._id,
+      correo: req.usuario.correo,
+      currentPassword: req.body.currentPassword,
+      newPassword: req.body.newPassword,
+      ip: req.ip,
     });
     res.json({ success: true, ...result });
   } catch (error) {
@@ -119,4 +135,5 @@ module.exports = {
   usuariosDashboard,
   miPerfilGet,
   miPerfilPut,
+  miPerfilPasswordPatch,
 };

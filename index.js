@@ -1,6 +1,17 @@
 require("dotenv").config();
-const Server = require("./models/server");
 
-const server = new Server();
+const createApp = require("./app");
+const { dbConnection } = require("./database/config");
+const logger = require("./helpers/logger");
 
-server.listen();
+const PORT = process.env.PORT || 3000;
+
+const start = async () => {
+  await dbConnection();
+  const app = createApp();
+  app.listen(PORT, () => {
+    logger.info(`Servidor corriendo en puerto: ${PORT}`);
+  });
+};
+
+start();

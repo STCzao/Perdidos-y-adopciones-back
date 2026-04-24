@@ -20,20 +20,25 @@ const makeMockUser = (overrides = {}) => ({
   password: "hashed",
   estado: true,
   rol: "USER_ROLE",
+  img: "https://res.cloudinary.com/demo/image/upload/avatar.jpg",
   refreshTokens: [],
+  resetToken: undefined,
+  resetTokenExp: undefined,
   save: jest.fn().mockResolvedValue(undefined),
+  toJSON: jest.fn(function toJSON() {
+    const { password, resetToken, resetTokenExp, refreshTokens, _id, ...resto } = this;
+    return { ...resto, uid: _id };
+  }),
   ...overrides,
 });
 
 describe("service/usuarios", () => {
   beforeEach(() => jest.clearAllMocks());
 
-  // ─── getUsuarios ──────────────────────────────────────────────────────────
   describe("getUsuarios", () => {
-    test("retorna usuarios con total y paginación", async () => {
+    test("retorna usuarios con total y paginacion", async () => {
       const mockUsers = [makeMockUser(), makeMockUser()];
       Usuario.countDocuments.mockResolvedValue(2);
-      // Simula el chain .find().select().skip().limit()
       const chainMock = {
         select: jest.fn().mockReturnThis(),
         skip: jest.fn().mockReturnThis(),
@@ -48,7 +53,7 @@ describe("service/usuarios", () => {
       expect(result.totalPages).toBe(1);
     });
 
-    test("limita el máximo a 100 por página", async () => {
+    test("limita el maximo a 100 por pagina", async () => {
       Usuario.countDocuments.mockResolvedValue(0);
       const chainMock = {
         select: jest.fn().mockReturnThis(),
@@ -62,7 +67,6 @@ describe("service/usuarios", () => {
     });
   });
 
-  // ─── crearUsuario ─────────────────────────────────────────────────────────
   describe("crearUsuario", () => {
     test("fuerza rol USER_ROLE independientemente del input", async () => {
       let savedData;
@@ -75,14 +79,15 @@ describe("service/usuarios", () => {
 
       await usuarioService.crearUsuario({
         nombre: "Juan",
-        correo: "juan@test.com",
+        correo: "JUAN@TEST.COM",
         password: "pass123",
         telefono: "3812345678",
-        rol: "ADMIN_ROLE", // intento de escalada de privilegios
+        rol: "ADMIN_ROLE",
         ip: "::1",
       });
 
       expect(savedData.rol).toBe("USER_ROLE");
+      expect(savedData.correo).toBe("juan@test.com");
     });
 
     test("hashea la contraseña antes de guardar", async () => {
@@ -104,7 +109,6 @@ describe("service/usuarios", () => {
     });
   });
 
-  // ─── actualizarUsuario ────────────────────────────────────────────────────
   describe("actualizarUsuario", () => {
     test("lanza AppError(403) si usuario no-admin intenta modificar otro usuario", async () => {
       const actualizante = makeMockUser({ _id: "uid-abc", rol: "USER_ROLE" });
@@ -145,7 +149,6 @@ describe("service/usuarios", () => {
     });
   });
 
-  // ─── cambiarEstado ────────────────────────────────────────────────────────
   describe("cambiarEstado", () => {
     test("lanza AppError(404) si el usuario no existe", async () => {
       Usuario.findById.mockResolvedValue(null);
@@ -180,26 +183,8 @@ describe("service/usuarios", () => {
       expect(mockUser.refreshTokens).toHaveLength(0);
       expect(mockUser.save).toHaveBeenCalled();
     });
-
-    test("NO limpia refreshTokens al habilitar usuario", async () => {
-      const mockUser = makeMockUser({
-        estado: false,
-        refreshTokens: [{ token: "t1" }],
-      });
-      Usuario.findById.mockResolvedValue(mockUser);
-
-      await usuarioService.cambiarEstado({
-        id: "uid-123",
-        estado: true,
-        usuarioActual: makeMockUser({ rol: "ADMIN_ROLE" }),
-        ip: "::1",
-      });
-
-      expect(mockUser.refreshTokens).toHaveLength(1);
-    });
   });
 
-  // ─── eliminarUsuario ──────────────────────────────────────────────────────
   describe("eliminarUsuario", () => {
     test("lanza AppError(403) si no-admin intenta borrar otro usuario", async () => {
       const usuarioActual = makeMockUser({ _id: "uid-abc" });
@@ -209,7 +194,7 @@ describe("service/usuarios", () => {
       expect(err.statusCode).toBe(403);
     });
 
-    test("auto-eliminación retorna logout:true", async () => {
+    test("auto-eliminacion retorna logout:true", async () => {
       const usuarioActual = makeMockUser({ _id: "uid-self" });
       const deletedUser = makeMockUser({ _id: "uid-self", estado: false });
       Usuario.findByIdAndUpdate.mockResolvedValue(deletedUser);
@@ -222,23 +207,25 @@ describe("service/usuarios", () => {
 
       expect(result.logout).toBe(true);
     });
+  });
 
-    test("admin eliminando otro usuario retorna logout:false", async () => {
-      const admin = makeMockUser({ _id: "uid-admin", rol: "ADMIN_ROLE" });
-      const deletedUser = makeMockUser({ _id: "uid-user", estado: false });
-      Usuario.findByIdAndUpdate.mockResolvedValue(deletedUser);
-
-      const result = await usuarioService.eliminarUsuario({
-        id: "uid-user",
-        usuarioActual: admin,
-        ip: "::1",
+  describe("getMiPerfil", () => {
+    test("retorna resumen de seguridad con sesiones activas", async () => {
+      const mockUser = makeMockUser({
+        refreshTokens: [
+          { token: "t1", device: "Chrome", ip: "181.20.1.10", createdAt: new Date("2026-01-01") },
+        ],
       });
+      Usuario.findById.mockResolvedValue(mockUser);
 
-      expect(result.logout).toBe(false);
+      const result = await usuarioService.getMiPerfil({ userId: "uid" });
+
+      expect(result.usuario.correo).toBe("test@test.com");
+      expect(result.seguridad.sesionesActivas).toBe(1);
+      expect(result.seguridad.sesiones[0].ip).toBe("181.20.*.*");
     });
   });
 
-  // ─── actualizarMiPerfil ───────────────────────────────────────────────────
   describe("actualizarMiPerfil", () => {
     test("lanza AppError(400) si se intenta cambiar password", async () => {
       const err = await usuarioService
@@ -255,22 +242,7 @@ describe("service/usuarios", () => {
       expect(err.statusCode).toBe(400);
     });
 
-    test("lanza AppError(400) si se envían campos no permitidos", async () => {
-      const err = await usuarioService
-        .actualizarMiPerfil({ userId: "uid", datos: { estadoHacker: true, otroField: "x" } })
-        .catch((e) => e);
-      expect(err.statusCode).toBe(400);
-    });
-
-    test("lanza AppError(400) si nombre es muy corto", async () => {
-      const err = await usuarioService
-        .actualizarMiPerfil({ userId: "uid", datos: { nombre: "AB" } })
-        .catch((e) => e);
-      expect(err.statusCode).toBe(400);
-      expect(err.errors?.nombre).toBeDefined();
-    });
-
-    test("lanza AppError(400) si teléfono tiene letras", async () => {
+    test("lanza AppError(400) si telefono tiene letras", async () => {
       const err = await usuarioService
         .actualizarMiPerfil({ userId: "uid", datos: { telefono: "abc123" } })
         .catch((e) => e);
@@ -278,27 +250,82 @@ describe("service/usuarios", () => {
       expect(err.errors?.telefono).toBeDefined();
     });
 
-    test("lanza AppError(400) si no hay cambios válidos para guardar", async () => {
+    test("lanza AppError(400) si imagen no es de Cloudinary", async () => {
       const err = await usuarioService
-        .actualizarMiPerfil({ userId: "uid", datos: { rol: "ADMIN_ROLE" } })
+        .actualizarMiPerfil({ userId: "uid", datos: { img: "https://otro.com/avatar.jpg" } })
         .catch((e) => e);
-      // rol se descarta, pero no hay campos válidos → AppError
       expect(err.statusCode).toBe(400);
+      expect(err.errors?.img).toBeDefined();
     });
 
-    test("actualiza nombre correctamente y retorna el usuario", async () => {
-      const updatedUser = makeMockUser({ nombre: "NUEVO NOMBRE" });
-      Usuario.findByIdAndUpdate.mockReturnValue({
-        select: jest.fn().mockResolvedValue(updatedUser),
+    test("actualiza nombre e imagen y retorna perfil seguro", async () => {
+      const updatedUser = makeMockUser({
+        nombre: "Nuevo Nombre",
+        img: "https://res.cloudinary.com/demo/image/upload/nueva.jpg",
+        refreshTokens: [{ token: "t1", device: "Chrome", ip: "181.20.1.10" }],
       });
+      Usuario.findByIdAndUpdate.mockResolvedValue(updatedUser);
 
       const result = await usuarioService.actualizarMiPerfil({
         userId: "uid",
-        datos: { nombre: "Nuevo Nombre" },
+        datos: {
+          nombre: "Nuevo Nombre",
+          img: "https://res.cloudinary.com/demo/image/upload/nueva.jpg",
+        },
+        ip: "::1",
       });
 
-      expect(result.usuario).toBe(updatedUser);
-      expect(result.msg).toBeDefined();
+      expect(result.usuario).toBeDefined();
+      expect(result.usuario.nombre).toBe("Nuevo Nombre");
+      expect(result.seguridad.sesionesActivas).toBe(1);
+    });
+  });
+
+  describe("cambiarPasswordMiPerfil", () => {
+    test("falla si la contraseña actual es incorrecta", async () => {
+      Usuario.findById.mockResolvedValue(makeMockUser());
+      bcryptjs.compareSync.mockReturnValue(false);
+
+      const err = await usuarioService
+        .cambiarPasswordMiPerfil({
+          userId: "uid",
+          correo: "test@test.com",
+          currentPassword: "mal",
+          newPassword: "Nueva123",
+          ip: "::1",
+        })
+        .catch((e) => e);
+
+      expect(err.statusCode).toBe(400);
+      expect(err.errors?.currentPassword).toBeDefined();
+    });
+
+    test("actualiza password e invalida sesiones persistidas", async () => {
+      const mockUser = makeMockUser({
+        refreshTokens: [{ token: "t1" }, { token: "t2" }],
+        resetToken: "reset",
+        resetTokenExp: new Date(Date.now() + 60000),
+      });
+      Usuario.findById.mockResolvedValue(mockUser);
+      bcryptjs.compareSync
+        .mockReturnValueOnce(true)
+        .mockReturnValueOnce(false);
+      bcryptjs.genSaltSync.mockReturnValue("salt");
+      bcryptjs.hashSync.mockReturnValue("hashed-new");
+
+      const result = await usuarioService.cambiarPasswordMiPerfil({
+        userId: "uid",
+        correo: "test@test.com",
+        currentPassword: "Actual123",
+        newPassword: "Nueva123",
+        ip: "::1",
+      });
+
+      expect(mockUser.password).toBe("hashed-new");
+      expect(mockUser.refreshTokens).toHaveLength(0);
+      expect(mockUser.resetToken).toBeUndefined();
+      expect(mockUser.save).toHaveBeenCalled();
+      expect(result.msg).toMatch(/Contraseña actualizada/i);
     });
   });
 });

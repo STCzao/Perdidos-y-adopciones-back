@@ -13,49 +13,58 @@ const { validarJWT } = require("../middlewares/validar-jwt");
 
 const router = Router();
 
-// Login
 router.post(
   "/login",
   [
-    check("correo", "Debe ser un correo válido").isEmail(),
+    check("correo", "Debe ser un correo valido").isEmail().normalizeEmail(),
     check("password", "La contraseña es obligatoria").not().isEmpty(),
     validarCampos,
   ],
-  login
+  login,
 );
 
-// Forgot password
 router.post(
   "/forgot-password",
-  [check("correo", "Debe ser un correo válido").isEmail(), validarCampos],
-  forgotPassword
+  [check("correo", "Debe ser un correo valido").isEmail().normalizeEmail(), validarCampos],
+  forgotPassword,
 );
 
-// Reset password
 router.post(
   "/reset-password/:token",
   [
     check("password", "La contraseña es obligatoria").not().isEmpty(),
-    check("password", "La contraseña debe tener entre 6 y 64 caracteres").isLength({ min: 6, max: 64 }),
+    check("password", "La contraseña debe tener entre 8 y 64 caracteres").isLength({
+      min: 8,
+      max: 64,
+    }),
+    check("confirmPassword", "La confirmación de contraseña es obligatoria").not().isEmpty(),
+    check("confirmPassword").custom((value, { req }) => {
+      if (value !== req.body.password) {
+        throw new Error("La confirmación de contraseña no coincide");
+      }
+      return true;
+    }),
     validarCampos,
   ],
-  resetPassword
+  resetPassword,
 );
 
-// Renovar access token usando refresh token
 router.post(
   "/refresh",
   [
-    check("refreshToken", "El refresh token es obligatorio").not().isEmpty(),
+    check("refreshToken").custom((value, { req }) => {
+      const cookieToken = req.cookies?.refreshToken;
+      if (!value && !cookieToken) {
+        throw new Error("El refresh token es obligatorio");
+      }
+      return true;
+    }),
     validarCampos,
   ],
-  refreshToken
+  refreshToken,
 );
 
-// Logout (cerrar sesión en dispositivo actual)
 router.post("/logout", validarJWT, logout);
-
-// Logout de todos los dispositivos
 router.post("/logout-all", validarJWT, logoutAll);
 
 module.exports = router;

@@ -30,6 +30,7 @@ describe("E2E: /api/auth", () => {
       expect(res.status).toBe(200);
       expect(res.body.accessToken).toBeDefined();
       expect(res.body.refreshToken).toBeDefined();
+      expect(res.headers["set-cookie"]).toBeDefined();
     });
 
     test("400 con contraseña incorrecta", async () => {
@@ -111,7 +112,7 @@ describe("E2E: /api/auth", () => {
     test("400 con token inválido", async () => {
       const res = await request(app)
         .post("/api/auth/reset-password/tokeninvalido")
-        .send({ password: "nuevaPass123" });
+        .send({ password: "nuevaPass123", confirmPassword: "nuevaPass123" });
 
       expect(res.status).toBe(400);
     });
@@ -128,9 +129,18 @@ describe("E2E: /api/auth", () => {
 
       const res = await request(app)
         .post(`/api/auth/reset-password/${rawToken}`)
-        .send({ password: "nuevaPass123" });
+        .send({ password: "nuevaPass123", confirmPassword: "nuevaPass123" });
 
       expect(res.status).toBe(200);
+    });
+
+    test("400 si la confirmación no coincide en reset password", async () => {
+      const res = await request(app)
+        .post("/api/auth/reset-password/tokeninvalido")
+        .send({ password: "nuevaPass123", confirmPassword: "otraPass123" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.errors?.confirmPassword).toBeDefined();
     });
   });
 
@@ -150,6 +160,25 @@ describe("E2E: /api/auth", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.accessToken).toBeDefined();
+    });
+
+    test("200 con nuevo token usando refreshToken desde cookie", async () => {
+      await createUser({ correo: "usuario@refreshcookie.com", rawPassword: "password123" });
+
+      const loginRes = await request(app)
+        .post("/api/auth/login")
+        .send({ correo: "usuario@refreshcookie.com", password: "password123" });
+
+      const cookie = loginRes.headers["set-cookie"];
+
+      const res = await request(app)
+        .post("/api/auth/refresh")
+        .set("Cookie", cookie)
+        .send({});
+
+      expect(res.status).toBe(200);
+      expect(res.body.accessToken).toBeDefined();
+      expect(res.headers["set-cookie"]).toBeDefined();
     });
 
     test("401 con refreshToken inválido", async () => {
@@ -184,6 +213,7 @@ describe("E2E: /api/auth", () => {
         .send({ refreshToken: loginRes.body.refreshToken });
 
       expect(res.status).toBe(200);
+      expect(res.headers["set-cookie"]).toBeDefined();
     });
 
     test("401 sin token de autenticación", async () => {
