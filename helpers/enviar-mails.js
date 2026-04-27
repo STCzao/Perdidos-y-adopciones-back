@@ -28,12 +28,24 @@ const enviarEmail = async (to, subject, html) => {
     }
 
     const resend = getResendClient();
-    const data = await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from: process.env.RESEND_FROM,
       to,
       subject,
       html,
     });
+
+    if (error) {
+      const resendError = new Error(error.message || "Resend rechazo el envio del correo");
+      resendError.name = error.name || "ResendError";
+      resendError.statusCode = error.statusCode;
+      resendError.details = error;
+      throw resendError;
+    }
+
+    if (!data?.id) {
+      throw new Error("Resend no devolvio un identificador del correo enviado");
+    }
 
     logger.info("Correo enviado exitosamente", {
       destinatario: to,
@@ -47,6 +59,7 @@ const enviarEmail = async (to, subject, html) => {
       destinatario: to,
       asunto: subject,
       response: error?.response,
+      details: error?.details,
     });
 
     throw error;
