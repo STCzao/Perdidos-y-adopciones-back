@@ -1,5 +1,13 @@
 const authService = require("../service/auth");
 
+const buildRefreshCookieOptions = () => ({
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  maxAge: 30 * 24 * 60 * 60 * 1000,
+  path: "/",
+});
+
 const login = async (req, res, next) => {
   try {
     const result = await authService.login({
@@ -8,6 +16,7 @@ const login = async (req, res, next) => {
       userAgent: req.headers["user-agent"],
       ip: req.ip,
     });
+    res.cookie("refreshToken", result.refreshToken, buildRefreshCookieOptions());
     res.json({ success: true, ...result });
   } catch (error) {
     next(error);
@@ -42,10 +51,11 @@ const resetPassword = async (req, res, next) => {
 const refreshToken = async (req, res, next) => {
   try {
     const result = await authService.renovarToken({
-      refreshToken: req.body.refreshToken,
+      refreshToken: req.body.refreshToken || req.cookies?.refreshToken,
       userAgent: req.headers["user-agent"],
       ip: req.ip,
     });
+    res.cookie("refreshToken", result.refreshToken, buildRefreshCookieOptions());
     res.json({ success: true, ...result });
   } catch (error) {
     next(error);
@@ -56,10 +66,11 @@ const logout = async (req, res, next) => {
   try {
     const result = await authService.logout({
       userId: req.usuario._id,
-      refreshToken: req.body.refreshToken,
+      refreshToken: req.body.refreshToken || req.cookies?.refreshToken,
       correo: req.usuario.correo,
       ip: req.ip,
     });
+    res.clearCookie("refreshToken", buildRefreshCookieOptions());
     res.json({ success: true, ...result });
   } catch (error) {
     next(error);
@@ -73,6 +84,7 @@ const logoutAll = async (req, res, next) => {
       correo: req.usuario.correo,
       ip: req.ip,
     });
+    res.clearCookie("refreshToken", buildRefreshCookieOptions());
     res.json({ success: true, ...result });
   } catch (error) {
     next(error);

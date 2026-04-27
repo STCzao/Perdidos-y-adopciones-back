@@ -1,5 +1,8 @@
 const mongoose = require("mongoose");
+const dns = require("dns");
 const logger = require("../helpers/logger");
+
+dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
 const dbConnection = async () => {
   try {

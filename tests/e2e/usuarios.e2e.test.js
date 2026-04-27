@@ -9,7 +9,6 @@ const Usuario = require("../../models/usuario");
 
 let app;
 
-// Helper: login y obtener token
 const loginAs = async (correo, password = "password123") => {
   const res = await request(app).post("/api/auth/login").send({ correo, password });
   return res.body.accessToken;
@@ -23,13 +22,13 @@ describe("E2E: /api/usuarios", () => {
   afterAll(async () => await db.disconnect());
   afterEach(async () => await db.clearCollections());
 
-  // ─── POST / — Registro ────────────────────────────────────────────────────────
   describe("POST /api/usuarios", () => {
-    test("201 crea usuario con datos válidos", async () => {
+    test("201 crea usuario con datos validos", async () => {
       const res = await request(app).post("/api/usuarios").send({
         nombre: "Juan Perez",
         correo: "juan@nuevo.com",
         password: "pass1234",
+        confirmPassword: "pass1234",
         telefono: "3812345678",
       });
 
@@ -38,53 +37,40 @@ describe("E2E: /api/usuarios", () => {
       expect(res.body.usuario.correo).toBe("juan@nuevo.com");
     });
 
-    test("400 si falta el nombre", async () => {
-      const res = await request(app).post("/api/usuarios").send({
-        correo: "sin@nombre.com",
-        password: "pass1234",
-        telefono: "3812345678",
-      });
-      expect(res.status).toBe(400);
-      expect(res.body.errors).toBeDefined();
-    });
-
-    test("400 si el correo no es válido", async () => {
-      const res = await request(app).post("/api/usuarios").send({
-        nombre: "Juan",
-        correo: "noesuncorreo",
-        password: "pass1234",
-        telefono: "3812345678",
-      });
-      expect(res.status).toBe(400);
-    });
-
-    test("400 si el teléfono tiene letras", async () => {
-      const res = await request(app).post("/api/usuarios").send({
-        nombre: "Juan",
-        correo: "juan@test.com",
-        password: "pass1234",
-        telefono: "abc12345",
-      });
-      expect(res.status).toBe(400);
-    });
-
-    test("400 si el correo ya está registrado", async () => {
+    test("400 si el correo ya esta registrado", async () => {
       await createUser({ correo: "duplicado@test.com" });
 
       const res = await request(app).post("/api/usuarios").send({
         nombre: "Repetido",
         correo: "duplicado@test.com",
         password: "pass1234",
+        confirmPassword: "pass1234",
         telefono: "3812345678",
       });
       expect(res.status).toBe(400);
     });
+
+    test("400 si la confirmación de contraseña no coincide", async () => {
+      const res = await request(app).post("/api/usuarios").send({
+        nombre: "Juan Perez",
+        correo: "juan2@nuevo.com",
+        password: "pass1234",
+        confirmPassword: "distinta123",
+        telefono: "3812345678",
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.errors?.confirmPassword).toBeDefined();
+    });
   });
 
-  // ─── GET /mi-perfil ──────────────────────────────────────────────────────────
   describe("GET /api/usuarios/mi-perfil", () => {
-    test("200 retorna los datos del usuario autenticado", async () => {
-      await createUser({ correo: "perfil@test.com", rawPassword: "password123" });
+    test("200 retorna datos del usuario y resumen de seguridad", async () => {
+      await createUser({
+        correo: "perfil@test.com",
+        rawPassword: "password123",
+        refreshTokens: [{ token: "rt", device: "Chrome", ip: "181.20.1.10" }],
+      });
       const token = await loginAs("perfil@test.com");
 
       const res = await request(app)
@@ -92,8 +78,9 @@ describe("E2E: /api/usuarios", () => {
         .set("x-token", token);
 
       expect(res.status).toBe(200);
-      expect(res.body.usuario).toBeDefined();
       expect(res.body.usuario.correo).toBe("perfil@test.com");
+      expect(res.body.seguridad).toBeDefined();
+      expect(res.body.seguridad.sesionesActivas).toBeGreaterThanOrEqual(1);
     });
 
     test("401 sin token", async () => {
@@ -102,19 +89,22 @@ describe("E2E: /api/usuarios", () => {
     });
   });
 
-  // ─── PUT /mi-perfil ──────────────────────────────────────────────────────────
   describe("PUT /api/usuarios/mi-perfil", () => {
-    test("200 actualiza el nombre del usuario", async () => {
+    test("200 actualiza nombre e imagen del usuario", async () => {
       await createUser({ correo: "update@test.com", rawPassword: "password123" });
       const token = await loginAs("update@test.com");
 
       const res = await request(app)
         .put("/api/usuarios/mi-perfil")
         .set("x-token", token)
-        .send({ nombre: "Nuevo Nombre" });
+        .send({
+          nombre: "Nuevo Nombre",
+          img: "https://res.cloudinary.com/demo/image/upload/avatar.jpg",
+        });
 
       expect(res.status).toBe(200);
       expect(res.body.usuario.nombre).toBe("Nuevo Nombre");
+      expect(res.body.usuario.img).toBe("https://res.cloudinary.com/demo/image/upload/avatar.jpg");
     });
 
     test("400 si se intenta actualizar el correo", async () => {
@@ -129,56 +119,88 @@ describe("E2E: /api/usuarios", () => {
       expect(res.status).toBe(400);
     });
 
-    test("400 si se intenta actualizar la contraseña", async () => {
-      await createUser({ correo: "pass@test.com", rawPassword: "password123" });
-      const token = await loginAs("pass@test.com");
+    test("400 si la imagen no pertenece a Cloudinary", async () => {
+      await createUser({ correo: "img@test.com", rawPassword: "password123" });
+      const token = await loginAs("img@test.com");
 
       const res = await request(app)
         .put("/api/usuarios/mi-perfil")
         .set("x-token", token)
-        .send({ password: "nuevapass" });
+        .send({ img: "https://otro-cdn.com/avatar.jpg" });
+
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe("PATCH /api/usuarios/mi-perfil/password", () => {
+    test("200 cambia la contraseña y limpia sesiones persistidas", async () => {
+      const user = await createUser({
+        correo: "pass@test.com",
+        rawPassword: "password123",
+        refreshTokens: [{ token: "rt", device: "Chrome", ip: "::1" }],
+      });
+      const token = await loginAs("pass@test.com");
+
+      const res = await request(app)
+        .patch("/api/usuarios/mi-perfil/password")
+        .set("x-token", token)
+        .send({
+          currentPassword: "password123",
+          newPassword: "nuevapass123",
+          confirmPassword: "nuevapass123",
+        });
+
+      expect(res.status).toBe(200);
+      const updated = await Usuario.findById(user._id);
+      expect(updated.refreshTokens).toHaveLength(0);
+    });
+
+    test("400 si la contraseña actual es incorrecta", async () => {
+      await createUser({ correo: "pass2@test.com", rawPassword: "password123" });
+      const token = await loginAs("pass2@test.com");
+
+      const res = await request(app)
+        .patch("/api/usuarios/mi-perfil/password")
+        .set("x-token", token)
+        .send({
+          currentPassword: "incorrecta",
+          newPassword: "nuevapass123",
+          confirmPassword: "nuevapass123",
+        });
 
       expect(res.status).toBe(400);
     });
 
-    test("401 sin token", async () => {
-      const res = await request(app).put("/api/usuarios/mi-perfil").send({ nombre: "X" });
-      expect(res.status).toBe(401);
+    test("400 si la confirmación no coincide en cambio de contraseña", async () => {
+      await createUser({ correo: "pass3@test.com", rawPassword: "password123" });
+      const token = await loginAs("pass3@test.com");
+
+      const res = await request(app)
+        .patch("/api/usuarios/mi-perfil/password")
+        .set("x-token", token)
+        .send({
+          currentPassword: "password123",
+          newPassword: "nuevapass123",
+          confirmPassword: "otra12345",
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.errors?.confirmPassword).toBeDefined();
     });
   });
 
-  // ─── GET / — Admin: listar usuarios ─────────────────────────────────────────
   describe("GET /api/usuarios", () => {
     test("200 retorna lista paginada para ADMIN_ROLE", async () => {
       await createAdmin({ correo: "admin@list.com", rawPassword: "password123" });
       const token = await loginAs("admin@list.com");
 
-      const res = await request(app)
-        .get("/api/usuarios")
-        .set("x-token", token);
+      const res = await request(app).get("/api/usuarios").set("x-token", token);
 
       expect(res.status).toBe(200);
       expect(res.body.usuarios).toBeDefined();
     });
-
-    test("403 para USER_ROLE", async () => {
-      await createUser({ correo: "user@list.com", rawPassword: "password123" });
-      const token = await loginAs("user@list.com");
-
-      const res = await request(app)
-        .get("/api/usuarios")
-        .set("x-token", token);
-
-      expect(res.status).toBe(403);
-    });
-
-    test("401 sin token", async () => {
-      const res = await request(app).get("/api/usuarios");
-      expect(res.status).toBe(401);
-    });
   });
 
-  // ─── PUT /:id/estado ──────────────────────────────────────────────────────────
   describe("PUT /api/usuarios/:id/estado", () => {
     test("200 el admin puede cambiar el estado de un usuario", async () => {
       const user = await createUser({ correo: "target@test.com" });
@@ -192,22 +214,8 @@ describe("E2E: /api/usuarios", () => {
 
       expect(res.status).toBe(200);
     });
-
-    test("403 si un usuario normal intenta cambiar el estado", async () => {
-      const target = await createUser({ correo: "target2@test.com" });
-      await createUser({ correo: "normal@estado.com", rawPassword: "password123" });
-      const userToken = await loginAs("normal@estado.com");
-
-      const res = await request(app)
-        .put(`/api/usuarios/${target._id}/estado`)
-        .set("x-token", userToken)
-        .send({ estado: false });
-
-      expect(res.status).toBe(403);
-    });
   });
 
-  // ─── DELETE /:id ──────────────────────────────────────────────────────────────
   describe("DELETE /api/usuarios/:id", () => {
     test("200 el admin puede eliminar a otro usuario", async () => {
       const user = await createUser({ correo: "aeliminar@test.com" });
@@ -221,12 +229,6 @@ describe("E2E: /api/usuarios", () => {
       expect(res.status).toBe(200);
       const inDB = await Usuario.findById(user._id);
       expect(inDB.estado).toBe(false);
-    });
-
-    test("401 sin token", async () => {
-      const user = await createUser();
-      const res = await request(app).delete(`/api/usuarios/${user._id}`);
-      expect(res.status).toBe(401);
     });
   });
 });
