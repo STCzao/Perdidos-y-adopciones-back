@@ -1,8 +1,15 @@
 const crypto = require("crypto");
 const logger = require("../helpers/logger");
+const AppError = require("../helpers/AppError");
+
+const ALLOWED_CLOUDINARY_FOLDERS = ["publicaciones", "comunidad", "usuarios"];
 
 const buildCloudinarySignaturePayload = ({ carpeta, timestamp }) => {
-  const paramsToSign = `folder=${carpeta}&timestamp=${timestamp}`;
+  const params = { folder: carpeta, timestamp };
+  const paramsToSign = Object.keys(params)
+    .sort()
+    .map((key) => `${key}=${params[key]}`)
+    .join("&");
   const signature = crypto
     .createHash("sha1")
     .update(`${paramsToSign}${process.env.CLOUDINARY_API_SECRET}`)
@@ -12,10 +19,8 @@ const buildCloudinarySignaturePayload = ({ carpeta, timestamp }) => {
 };
 
 const assertValidCloudinaryFolder = (carpeta) => {
-  const allowedFolders = ["publicaciones", "comunidad", "usuarios"];
-
-  if (!allowedFolders.includes(carpeta)) {
-    throw new Error("Carpeta de Cloudinary no valida");
+  if (!ALLOWED_CLOUDINARY_FOLDERS.includes(carpeta)) {
+    throw new AppError("Carpeta de Cloudinary no valida", 400);
   }
 };
 
@@ -24,7 +29,7 @@ const obtenerFirma = async (req, res, next) => {
     const { carpeta } = req.query;
     assertValidCloudinaryFolder(carpeta);
 
-    const timestamp = Math.floor(Date.now() / 1000);
+    const timestamp = Math.round(Date.now() / 1000);
     const { signature } = buildCloudinarySignaturePayload({ carpeta, timestamp });
 
     logger.info("Firma de Cloudinary generada", {
