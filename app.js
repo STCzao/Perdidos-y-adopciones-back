@@ -41,6 +41,12 @@ const parseCookies = (cookieHeader = "") =>
     return acc;
   }, {});
 
+const createLimiter = ({ development = {}, production = {}, ...baseConfig }) =>
+  rateLimit({
+    ...baseConfig,
+    ...(process.env.NODE_ENV === "production" ? production : development),
+  });
+
 const createApp = ({ testMode = false } = {}) => {
   const app = express();
 
@@ -78,85 +84,107 @@ const createApp = ({ testMode = false } = {}) => {
     }),
   );
 
-  app.use((req, res, next) => {
-    if (req.body) sanitize(req.body, req);
-    if (req.query) sanitize(req.query, req);
-    if (req.params) sanitize(req.params, req);
-    next();
-  });
-
   if (testMode) {
     app.use(rateLimit({ windowMs: 60_000, max: 10_000 }));
   } else {
     app.use(
       "/api/auth/login",
-      rateLimit({
+      createLimiter({
         windowMs: 15 * 60 * 1000,
-        max: 10,
         message: {
           success: false,
           msg: "Demasiados intentos de inicio de sesion. Por favor, intente nuevamente despues de 15 minutos.",
         },
         standardHeaders: true,
         legacyHeaders: false,
+        production: {
+          max: 10,
+        },
+        development: {
+          max: 100,
+          skipFailedRequests: true,
+        },
       }),
     );
 
     app.use(
       "/api/auth/forgot-password",
-      rateLimit({
+      createLimiter({
         windowMs: 15 * 60 * 1000,
-        max: 3,
         message: {
           success: false,
           msg: "Demasiadas solicitudes de restablecimiento de contrasena. Por favor, intente nuevamente despues de 15 minutos.",
         },
         standardHeaders: true,
         legacyHeaders: false,
+        production: {
+          max: 3,
+        },
+        development: {
+          max: 20,
+          skipFailedRequests: true,
+        },
       }),
     );
 
     app.use(
       "/api/auth/refresh",
-      rateLimit({
+      createLimiter({
         windowMs: 5 * 60 * 1000,
-        max: 30,
         message: {
           success: false,
           msg: "Demasiados intentos de renovacion de token. Por favor, intente nuevamente despues de 5 minutos.",
         },
         standardHeaders: true,
         legacyHeaders: false,
-        skipSuccessfulRequests: true,
+        production: {
+          max: 30,
+          skipSuccessfulRequests: true,
+        },
+        development: {
+          max: 120,
+          skipFailedRequests: true,
+        },
       }),
     );
 
     app.use(
       "/api/usuarios/mi-perfil",
-      rateLimit({
+      createLimiter({
         windowMs: 1 * 60 * 1000,
-        max: 60,
         message: {
           success: false,
           msg: "Demasiadas solicitudes de perfil. Por favor, intente nuevamente mas tarde.",
         },
         standardHeaders: true,
         legacyHeaders: false,
-        skipSuccessfulRequests: true,
+        production: {
+          max: 60,
+          skipSuccessfulRequests: true,
+        },
+        development: {
+          max: 300,
+          skipFailedRequests: true,
+        },
       }),
     );
 
     app.use(
       "/api/",
-      rateLimit({
+      createLimiter({
         windowMs: 1 * 60 * 1000,
-        max: 100,
         message: {
           success: false,
           msg: "Demasiadas solicitudes. Por favor, intente nuevamente mas tarde.",
         },
         standardHeaders: true,
         legacyHeaders: false,
+        production: {
+          max: 100,
+        },
+        development: {
+          max: 1000,
+        },
       }),
     );
   }
@@ -164,6 +192,12 @@ const createApp = ({ testMode = false } = {}) => {
   app.use(express.json());
   app.use((req, _res, next) => {
     req.cookies = parseCookies(req.headers.cookie);
+    next();
+  });
+  app.use((req, res, next) => {
+    if (req.body) sanitize(req.body, req);
+    if (req.query) sanitize(req.query, req);
+    if (req.params) sanitize(req.params, req);
     next();
   });
 

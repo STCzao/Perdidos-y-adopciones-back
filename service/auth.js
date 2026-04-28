@@ -1,14 +1,14 @@
 const bcryptjs = require("bcryptjs");
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
-const Usuario = require("../models/usuario");
 const { generarAccessToken, generarRefreshToken } = require("../helpers/generar-jwt");
 const { enviarEmail } = require("../helpers/enviar-mails");
 const logger = require("../helpers/logger");
 const AppError = require("../helpers/AppError");
+const authRepository = require("../repositories/authRepository");
 
 const login = async ({ correo, password, userAgent, ip }) => {
-  const usuario = await Usuario.findOne({ correo });
+  const usuario = await authRepository.findByCorreo(correo);
 
   if (!usuario || !usuario.estado) {
     logger.warn("Intento de login fallido - Usuario no existe o inactivo", { correo, ip });
@@ -43,7 +43,7 @@ const login = async ({ correo, password, userAgent, ip }) => {
     usuario.refreshTokens = usuario.refreshTokens.slice(-5);
   }
 
-  await usuario.save();
+  await authRepository.save(usuario);
 
   logger.info("Login exitoso", {
     correo,
@@ -60,7 +60,7 @@ const forgotPassword = async ({ correo, ip }) => {
     msg: "Si el correo está registrado, recibirás un enlace en los próximos minutos. Revisá también la carpeta de Spam.",
   };
 
-  const usuario = await Usuario.findOne({ correo });
+  const usuario = await authRepository.findByCorreo(correo);
 
   if (!usuario) {
     logger.warn("Solicitud de recuperación para correo no registrado", { correo, ip });
@@ -82,7 +82,7 @@ const forgotPassword = async ({ correo, ip }) => {
 
   usuario.resetToken = token;
   usuario.resetTokenExp = Date.now() + 3600000; // 1 hora
-  await usuario.save();
+  await authRepository.save(usuario);
 
   logger.info("Email de recuperación enviado", { correo, ip });
 
@@ -90,10 +90,7 @@ const forgotPassword = async ({ correo, ip }) => {
 };
 
 const resetPassword = async ({ token, password, ip }) => {
-  const usuario = await Usuario.findOne({
-    resetToken: token,
-    resetTokenExp: { $gt: Date.now() },
-  });
+  const usuario = await authRepository.findByResetToken(token);
 
   if (!usuario) {
     logger.warn("Intento de reset con token inválido o expirado", {
@@ -110,7 +107,7 @@ const resetPassword = async ({ token, password, ip }) => {
   usuario.refreshTokens = [];
   usuario.resetToken = undefined;
   usuario.resetTokenExp = undefined;
-  await usuario.save();
+  await authRepository.save(usuario);
 
   logger.info("Contraseña restablecida exitosamente", {
     correo: usuario.correo,
@@ -136,14 +133,14 @@ const renovarToken = async ({ refreshToken, userAgent, ip }) => {
     throw new AppError("Refresh token inválido o expirado", 401);
   }
 
-  const usuario = await Usuario.findById(uid);
+  const usuario = await authRepository.findById(uid);
   if (!usuario) {
     throw new AppError("Usuario no encontrado", 401);
   }
 
   if (!usuario.estado) {
     usuario.refreshTokens = [];
-    await usuario.save();
+    await authRepository.save(usuario);
     logger.warn("Intento de refresh con usuario deshabilitado", { correo: usuario.correo, ip });
     throw new AppError("Usuario deshabilitado. Tokens invalidados.", 401);
   }
@@ -159,7 +156,7 @@ const renovarToken = async ({ refreshToken, userAgent, ip }) => {
       motivo: tokensActuales === 0 ? "Usuario cerró sesión previamente" : "Posible robo de token",
     });
     usuario.refreshTokens = [];
-    await usuario.save();
+    await authRepository.save(usuario);
     throw new AppError(
       "Refresh token inválido. Por seguridad, cierra sesión en todos tus dispositivos.",
       401
@@ -177,7 +174,7 @@ const renovarToken = async ({ refreshToken, userAgent, ip }) => {
     device: userAgent || "Unknown",
     ip,
   });
-  await usuario.save();
+  await authRepository.save(usuario);
 
   logger.info("Token renovado exitosamente", { correo: usuario.correo, ip });
 
@@ -185,7 +182,7 @@ const renovarToken = async ({ refreshToken, userAgent, ip }) => {
 };
 
 const logout = async ({ userId, refreshToken, correo, ip }) => {
-  const usuario = await Usuario.findById(userId);
+  const usuario = await authRepository.findById(userId);
 
   if (!usuario) {
     return { msg: "Sesión cerrada correctamente" };
@@ -193,7 +190,7 @@ const logout = async ({ userId, refreshToken, correo, ip }) => {
 
   if (refreshToken) {
     usuario.refreshTokens = usuario.refreshTokens.filter((rt) => rt.token !== refreshToken);
-    await usuario.save();
+    await authRepository.save(usuario);
   }
 
   logger.info("Logout exitoso", { correo, ip });
@@ -202,14 +199,14 @@ const logout = async ({ userId, refreshToken, correo, ip }) => {
 };
 
 const logoutAll = async ({ userId, correo, ip }) => {
-  const usuario = await Usuario.findById(userId);
+  const usuario = await authRepository.findById(userId);
 
   if (!usuario) {
     return { msg: "Sesión cerrada en todos los dispositivos" };
   }
 
   usuario.refreshTokens = [];
-  await usuario.save();
+  await authRepository.save(usuario);
 
   logger.warn("Logout de todos los dispositivos", { correo, ip });
 

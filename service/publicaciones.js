@@ -1,14 +1,17 @@
-const Publicacion = require("../models/publicacion");
 const logger = require("../helpers/logger");
 const AppError = require("../helpers/AppError");
 const { normalizarTexto } = require("../helpers/normalizar-texto");
+const publicacionesRepository = require("../repositories/publicacionesRepository");
 
 const escaparRegex = (texto) => texto.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const ESTADOS_PUBLICOS = [
-  "BUSCANDO A SU FAMILIA", "APARECIO SU FAMILIA",
-  "SE BUSCA", "YA APARECIO",
-  "EN BUSCA DE UN HOGAR", "ADOPTADO",
+  "BUSCANDO A SU FAMILIA",
+  "APARECIO SU FAMILIA",
+  "SE BUSCA",
+  "YA APARECIO",
+  "EN BUSCA DE UN HOGAR",
+  "ADOPTADO",
 ];
 
 const ESTADO_DEFECTO = {
@@ -44,12 +47,14 @@ const getPublicaciones = async ({ page = 1, limit = 12, tipo, estado, search }) 
   }
 
   const [total, publicaciones] = await Promise.all([
-    Publicacion.countDocuments(query),
-    Publicacion.find(query)
-      .populate("usuario", "nombre")
-      .sort({ fechaCreacion: -1 })
-      .skip(skip)
-      .limit(limitNum),
+    publicacionesRepository.countDocuments(query),
+    publicacionesRepository.find({
+      filter: query,
+      populate: { path: "usuario", select: "nombre" },
+      sort: { fechaCreacion: -1 },
+      skip,
+      limit: limitNum,
+    }),
   ]);
 
   return { publicaciones, total, page: pageNum, totalPages: Math.ceil(total / limitNum) };
@@ -62,20 +67,24 @@ const getPublicacionesUsuario = async ({ id, usuarioActual }) => {
     throw new AppError("No tiene permisos para ver estas publicaciones", 403);
   }
 
-  const publicaciones = await Publicacion.find({ usuario: id })
-    .populate("usuario", "nombre")
-    .sort({ fechaCreacion: -1 });
+  const publicaciones = await publicacionesRepository.find({
+    filter: { usuario: id },
+    populate: { path: "usuario", select: "nombre" },
+    sort: { fechaCreacion: -1 },
+  });
 
   return { publicaciones };
 };
 
 const getPublicacion = async ({ id }) => {
-  const publicacion = await Publicacion.findOne({
-    _id: id,
-    estado: { $ne: "INACTIVO" },
-  })
-    .populate("usuario", "nombre")
-    .select("-whatsapp");
+  const publicacion = await publicacionesRepository.findOne({
+    filter: {
+      _id: id,
+      estado: { $ne: "INACTIVO" },
+    },
+    populate: { path: "usuario", select: "nombre" },
+    select: "-whatsapp",
+  });
 
   if (!publicacion) {
     throw new AppError("Publicación no encontrada", 404);
@@ -88,16 +97,15 @@ const crearPublicacion = async ({ body, usuarioId, correo, ip }) => {
   const { estado, usuario, ...datos } = body;
 
   const tipoNormalizado = normalizarTexto(datos.tipo);
-
   const datosNormalizados = {
     tipo: tipoNormalizado,
-    nombreanimal: normalizarTexto(datos.nombreanimal),
+    nombreanimal: datos.nombreanimal ? normalizarTexto(datos.nombreanimal) : undefined,
     especie: normalizarTexto(datos.especie),
     raza: normalizarTexto(datos.raza),
     sexo: normalizarTexto(datos.sexo),
     tamaño: normalizarTexto(datos.tamaño),
     color: normalizarTexto(datos.color),
-    edad: normalizarTexto(datos.edad),
+    edad: datos.edad ? normalizarTexto(datos.edad) : undefined,
     detalles: datos.detalles ? normalizarTexto(datos.detalles) : undefined,
     castrado: datos.castrado,
     whatsapp: datos.whatsapp,
@@ -118,9 +126,9 @@ const crearPublicacion = async ({ body, usuarioId, correo, ip }) => {
     datosNormalizados.energia = normalizarTexto(datos.energia);
   }
 
-  const publicacion = new Publicacion(datosNormalizados);
-  const publicacionDB = await publicacion.save();
-  await publicacionDB.populate("usuario", "nombre");
+  const publicacion = publicacionesRepository.create(datosNormalizados);
+  const publicacionDB = await publicacionesRepository.save(publicacion);
+  await publicacionesRepository.populateUsuario(publicacionDB, "nombre");
 
   logger.info("Publicación creada", {
     tipo: tipoNormalizado,
@@ -134,8 +142,7 @@ const crearPublicacion = async ({ body, usuarioId, correo, ip }) => {
 
 const actualizarPublicacion = async ({ id, body, usuarioActual }) => {
   const { _id, usuario, ...resto } = body;
-
-  const publicacionExistente = await Publicacion.findById(id);
+  const publicacionExistente = await publicacionesRepository.findById(id);
 
   if (!publicacionExistente) {
     throw new AppError("Publicación no encontrada", 404);
@@ -176,17 +183,18 @@ const actualizarPublicacion = async ({ id, body, usuarioActual }) => {
   delete datosNormalizados.tipo;
   delete datosNormalizados.estado;
 
-  const publicacionActualizada = await Publicacion.findByIdAndUpdate(
+  const publicacionActualizada = await publicacionesRepository.findByIdAndUpdate(
     id,
     datosNormalizados,
-    { new: true, runValidators: true }
-  ).populate("usuario", "nombre");
+    { new: true, runValidators: true },
+    { path: "usuario", select: "nombre" },
+  );
 
   return { publicacion: publicacionActualizada };
 };
 
 const cambiarEstadoPublicacion = async ({ id, estado, usuarioActual, correo, ip }) => {
-  const publicacion = await Publicacion.findById(id);
+  const publicacion = await publicacionesRepository.findById(id);
 
   if (!publicacion) {
     throw new AppError("Publicación no encontrada", 404);
@@ -199,11 +207,12 @@ const cambiarEstadoPublicacion = async ({ id, estado, usuarioActual, correo, ip 
     throw new AppError("No tiene permisos para cambiar el estado de esta publicación", 403);
   }
 
-  const publicacionActualizada = await Publicacion.findByIdAndUpdate(
+  const publicacionActualizada = await publicacionesRepository.findByIdAndUpdate(
     id,
     { estado: normalizarTexto(estado) },
-    { new: true }
-  ).populate("usuario", "nombre");
+    { new: true },
+    { path: "usuario", select: "nombre" },
+  );
 
   logger.info("Estado de publicación actualizado", {
     publicacionId: id,
@@ -216,7 +225,7 @@ const cambiarEstadoPublicacion = async ({ id, estado, usuarioActual, correo, ip 
 };
 
 const eliminarPublicacion = async ({ id, usuarioActual, correo, ip }) => {
-  const publicacion = await Publicacion.findById(id);
+  const publicacion = await publicacionesRepository.findById(id);
 
   if (!publicacion) {
     throw new AppError("Publicación no encontrada", 404);
@@ -229,7 +238,7 @@ const eliminarPublicacion = async ({ id, usuarioActual, correo, ip }) => {
     throw new AppError("No tiene permisos para eliminar esta publicación", 403);
   }
 
-  const publicacionEliminada = await Publicacion.findByIdAndDelete(id);
+  const publicacionEliminada = await publicacionesRepository.findByIdAndDelete(id);
 
   logger.warn("Publicación eliminada", {
     publicacionId: id,
@@ -242,10 +251,13 @@ const eliminarPublicacion = async ({ id, usuarioActual, correo, ip }) => {
 };
 
 const getContacto = async ({ id }) => {
-  const publicacion = await Publicacion.findOne({
-    _id: id,
-    estado: { $ne: "INACTIVO" },
-  }).select("whatsapp");
+  const publicacion = await publicacionesRepository.findOne({
+    filter: {
+      _id: id,
+      estado: { $ne: "INACTIVO" },
+    },
+    select: "whatsapp",
+  });
 
   if (!publicacion) {
     throw new AppError("Publicación no encontrada", 404);
@@ -263,12 +275,14 @@ const getPublicacionesAdmin = async ({ estado, page = 1, limit = 12 }) => {
   if (estado) query.estado = normalizarTexto(estado);
 
   const [total, publicaciones] = await Promise.all([
-    Publicacion.countDocuments(query),
-    Publicacion.find(query)
-      .populate("usuario", "nombre correo")
-      .sort({ fechaCreacion: -1 })
-      .skip(skip)
-      .limit(limitNum),
+    publicacionesRepository.countDocuments(query),
+    publicacionesRepository.find({
+      filter: query,
+      populate: { path: "usuario", select: "nombre correo" },
+      sort: { fechaCreacion: -1 },
+      skip,
+      limit: limitNum,
+    }),
   ]);
 
   return { total, page: pageNum, totalPages: Math.ceil(total / limitNum), publicaciones };

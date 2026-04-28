@@ -132,20 +132,18 @@ describe("service/usuarios", () => {
 
     test("hashea la contraseña cuando se incluye en los datos", async () => {
       const admin = makeMockUser({ _id: "uid-123", rol: "ADMIN_ROLE" });
-      const updatedUser = makeMockUser({ nombre: "Nuevo" });
-      Usuario.findByIdAndUpdate.mockReturnValue({
-        select: jest.fn().mockResolvedValue(updatedUser),
-      });
-      bcryptjs.genSaltSync.mockReturnValue("salt");
-      bcryptjs.hashSync.mockReturnValue("hashed-new");
+      const err = await usuarioService
+        .actualizarUsuario({
+          id: "uid-123",
+          datos: { password: "nuevaPass" },
+          usuarioActual: admin,
+        })
+        .catch((e) => e);
 
-      await usuarioService.actualizarUsuario({
-        id: "uid-123",
-        datos: { password: "nuevaPass" },
-        usuarioActual: admin,
-      });
-
-      expect(bcryptjs.hashSync).toHaveBeenCalledWith("nuevaPass", "salt");
+      expect(err).toBeInstanceOf(AppError);
+      expect(err.statusCode).toBe(400);
+      expect(err.errors?.password).toBeDefined();
+      expect(Usuario.findByIdAndUpdate).not.toHaveBeenCalled();
     });
   });
 

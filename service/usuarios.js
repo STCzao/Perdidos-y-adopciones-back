@@ -1,7 +1,7 @@
 const bcryptjs = require("bcryptjs");
-const Usuario = require("../models/usuario");
 const logger = require("../helpers/logger");
 const AppError = require("../helpers/AppError");
+const usuariosRepository = require("../repositories/usuariosRepository");
 
 const normalizarNombre = (nombre) => nombre.trim().replace(/\s+/g, " ");
 const normalizarCorreo = (correo) => correo.trim().toLowerCase();
@@ -51,15 +51,15 @@ const getUsuarios = async ({ page = 1, limit = 20 } = {}) => {
   const skip = (pageNum - 1) * limitNum;
 
   const [total, usuarios] = await Promise.all([
-    Usuario.countDocuments({}),
-    Usuario.find({}).select("-password").skip(skip).limit(limitNum),
+    usuariosRepository.countDocuments({}),
+    usuariosRepository.find({ select: "-password", skip, limit: limitNum }),
   ]);
 
   return { total, page: pageNum, totalPages: Math.ceil(total / limitNum), usuarios };
 };
 
 const crearUsuario = async ({ nombre, correo, password, telefono, ip }) => {
-  const usuario = new Usuario({
+  const usuario = usuariosRepository.create({
     nombre: normalizarNombre(nombre),
     correo: normalizarCorreo(correo),
     password,
@@ -69,7 +69,7 @@ const crearUsuario = async ({ nombre, correo, password, telefono, ip }) => {
 
   const salt = bcryptjs.genSaltSync();
   usuario.password = bcryptjs.hashSync(password, salt);
-  await usuario.save();
+  await usuariosRepository.save(usuario);
 
   logger.info("Usuario registrado exitosamente", {
     nombre: usuario.nombre,
@@ -87,6 +87,12 @@ const actualizarUsuario = async ({ id, datos, usuarioActual }) => {
 
   const { _id, password, google, correo, nombre, telefono, img, ...resto } = datos;
 
+  if (password !== undefined) {
+    throw new AppError("La contraseña no se puede modificar desde este endpoint", 400, {
+      password: "Para cambiar la contraseña use el endpoint específico",
+    });
+  }
+
   if (usuarioActual.rol !== "ADMIN_ROLE") {
     delete resto.rol;
     delete resto.estado;
@@ -96,14 +102,11 @@ const actualizarUsuario = async ({ id, datos, usuarioActual }) => {
   if (telefono) resto.telefono = normalizarTelefono(telefono);
   if (img) resto.img = normalizarImg(img);
 
-  if (password) {
-    resto.password = bcryptjs.hashSync(password, bcryptjs.genSaltSync());
-  }
-
-  const usuario = await Usuario.findByIdAndUpdate(id, resto, {
+  const usuario = await usuariosRepository.findByIdAndUpdate(id, resto, {
     new: true,
     runValidators: true,
-  }).select("-password");
+    select: "-password",
+  });
 
   if (!usuario) {
     throw new AppError("Usuario no encontrado", 404);
@@ -113,7 +116,7 @@ const actualizarUsuario = async ({ id, datos, usuarioActual }) => {
 };
 
 const cambiarEstado = async ({ id, estado, usuarioActual, ip }) => {
-  const usuario = await Usuario.findById(id);
+  const usuario = await usuariosRepository.findById(id);
 
   if (!usuario) {
     throw new AppError("Usuario no encontrado", 404);
@@ -127,7 +130,7 @@ const cambiarEstado = async ({ id, estado, usuarioActual, ip }) => {
   if (estado === false) {
     usuario.refreshTokens = [];
   }
-  await usuario.save();
+  await usuariosRepository.save(usuario);
 
   logger.info("Estado de usuario modificado", {
     usuarioId: id,
@@ -146,7 +149,7 @@ const eliminarUsuario = async ({ id, usuarioActual, ip }) => {
   }
 
   if (usuarioActual._id.toString() === id) {
-    const usuario = await Usuario.findByIdAndUpdate(
+    const usuario = await usuariosRepository.findByIdAndUpdate(
       id,
       { estado: false, refreshTokens: [] },
       { new: true },
@@ -162,7 +165,7 @@ const eliminarUsuario = async ({ id, usuarioActual, ip }) => {
     return { usuario, logout: true, msg: "Cuenta eliminada correctamente" };
   }
 
-  const usuario = await Usuario.findByIdAndUpdate(
+  const usuario = await usuariosRepository.findByIdAndUpdate(
     id,
     { estado: false, refreshTokens: [] },
     { new: true },
@@ -187,7 +190,9 @@ const getUsuario = async ({ id, usuarioActual }) => {
     throw new AppError("No tiene permisos para ver este usuario", 403);
   }
 
-  const usuario = await Usuario.findById(id).select("nombre correo telefono rol estado img");
+  const usuario = await usuariosRepository.findById(id, {
+    select: "nombre correo telefono rol estado img",
+  });
 
   if (!usuario) {
     throw new AppError("Usuario no encontrado", 404);
@@ -201,7 +206,7 @@ const getDashboard = async ({ id, usuarioActual }) => {
     throw new AppError("No tiene permisos para acceder a este dashboard", 403);
   }
 
-  const usuario = await Usuario.findById(id).select("-password");
+  const usuario = await usuariosRepository.findById(id, { select: "-password" });
 
   if (!usuario) {
     throw new AppError("Usuario no encontrado", 404);
@@ -211,7 +216,7 @@ const getDashboard = async ({ id, usuarioActual }) => {
 };
 
 const getMiPerfil = async ({ userId }) => {
-  const usuario = await Usuario.findById(userId);
+  const usuario = await usuariosRepository.findById(userId);
 
   if (!usuario) {
     throw new AppError("Usuario no encontrado", 404);
@@ -324,7 +329,7 @@ const actualizarMiPerfil = async ({ userId, datos, ip }) => {
     });
   }
 
-  const usuario = await Usuario.findByIdAndUpdate(userId, updateData, {
+  const usuario = await usuariosRepository.findByIdAndUpdate(userId, updateData, {
     new: true,
     runValidators: true,
   });
@@ -343,7 +348,7 @@ const actualizarMiPerfil = async ({ userId, datos, ip }) => {
 };
 
 const cambiarPasswordMiPerfil = async ({ userId, correo, currentPassword, newPassword, ip }) => {
-  const usuario = await Usuario.findById(userId);
+  const usuario = await usuariosRepository.findById(userId);
 
   if (!usuario) {
     throw new AppError("Usuario no encontrado", 404);
@@ -367,7 +372,7 @@ const cambiarPasswordMiPerfil = async ({ userId, correo, currentPassword, newPas
   usuario.refreshTokens = [];
   usuario.resetToken = undefined;
   usuario.resetTokenExp = undefined;
-  await usuario.save();
+  await usuariosRepository.save(usuario);
 
   logger.warn("Contraseña actualizada desde perfil", {
     userId,
