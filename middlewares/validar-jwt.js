@@ -2,6 +2,7 @@ const jwt = require("jsonwebtoken");
 const Usuario = require("../models/usuario");
 const logger = require("../helpers/logger");
 const AppError = require("../helpers/AppError");
+const { buildAccessTokenVerifyOptions } = require("../helpers/jwt-config");
 
 const validarJWT = async (req, res, next) => {
   const token = req.header("x-token");
@@ -11,7 +12,15 @@ const validarJWT = async (req, res, next) => {
   }
 
   try {
-    const { uid } = jwt.verify(token, process.env.SECRETORPRIVATEKEY);
+    const { uid, type } = jwt.verify(
+      token,
+      process.env.SECRETORPRIVATEKEY,
+      buildAccessTokenVerifyOptions(),
+    );
+
+    if (type !== "access") {
+      return next(new AppError("Token inválido", 401));
+    }
 
     const usuarioDB = await Usuario.findById(uid);
 

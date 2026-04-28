@@ -152,18 +152,9 @@
 <a name='L87'></a><a href='#L87'>87</a>
 <a name='L88'></a><a href='#L88'>88</a>
 <a name='L89'></a><a href='#L89'>89</a>
-<a name='L90'></a><a href='#L90'>90</a>
-<a name='L91'></a><a href='#L91'>91</a>
-<a name='L92'></a><a href='#L92'>92</a>
-<a name='L93'></a><a href='#L93'>93</a>
-<a name='L94'></a><a href='#L94'>94</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L90'></a><a href='#L90'>90</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">12x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -178,6 +169,7 @@
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -230,8 +222,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -239,7 +229,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -251,89 +243,85 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const logger = require("../helpers/logger");
 &nbsp;
-/**
- * Middleware centralizado para manejo de errores
- * Debe ser el último middleware registrado en server.js
- */
 const errorHandler = (err, req, res, next) =&gt; {
-  // Log del error con contexto completo
   logger.error("Error no manejado", {
     error: err.message,
     stack: err.stack,
     method: req.method,
     url: req.originalUrl,
     ip: req.ip,
+    requestId: req.requestId,
     usuario: req.usuario?.correo || "No autenticado",
   });
 &nbsp;
-  // Errores de validación de Mongoose
   if (err.name === "ValidationError") {
     const errors = {};
     Object.keys(err.errors).forEach((key) =&gt; {
       errors[key] = err.errors[key].message;
     });
+&nbsp;
     return res.status(400).json({
       success: false,
+      requestId: req.requestId,
       msg: "Error de validación",
       errors,
     });
   }
 &nbsp;
-  // Error de duplicado (Mongoose unique constraint)
   if (err.code === 11000) {
     const field = Object.keys(err.keyPattern)[0];
     return res.status(400).json({
       success: false,
+      requestId: req.requestId,
       msg: `Ya existe un registro con ese ${field}`,
     });
   }
 &nbsp;
-  // Error de CastError (ID inválido en MongoDB)
   if (err.name === "CastError") {
     return res.status(400).json({
       success: false,
+      requestId: req.requestId,
       msg: "ID inválido",
     });
   }
 &nbsp;
-  // Error de JWT
   if (err.name === "JsonWebTokenError") {
     return res.status(401).json({
       success: false,
+      requestId: req.requestId,
       msg: "Token inválido",
     });
   }
 &nbsp;
-  // Error de JWT expirado
   if (err.name === "TokenExpiredError") {
     return res.status(401).json({
       success: false,
+      requestId: req.requestId,
       msg: "Token expirado",
     });
   }
 &nbsp;
-  // Error genérico del servidor (incluye AppError con statusCode y errors)
   const statusCode = err.statusCode || 500;
-  res.status(statusCode).json({
+  return res.status(statusCode).json({
     success: false,
+    requestId: req.requestId,
     msg: err.message || "Error interno del servidor",
     ...(err.errors &amp;&amp; { errors: err.errors }),
     ...(process.env.NODE_ENV === "development" &amp;&amp; { stack: err.stack }),
   });
 };
 &nbsp;
-/**
- * Middleware para rutas no encontradas (404)
- */
 const notFound = (req, res) =&gt; {
   logger.warn("Ruta no encontrada", {
     method: req.method,
     url: req.originalUrl,
     ip: req.ip,
+    requestId: req.requestId,
   });
 &nbsp;
-  res.status(404).json({
+  return res.status(404).json({
     success: false,
+    requestId: req.requestId,
     msg: `Ruta no encontrada: ${req.method} ${req.originalUrl}`,
   });
 };
@@ -349,7 +337,7 @@ module.exports = {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-04-28T00:07:57.478Z
+                at 2026-04-28T00:27:30.177Z
             </div>
         <script src="../prettify.js"></script>
         <script>

@@ -1,20 +1,16 @@
 const jwt = require("jsonwebtoken");
 const logger = require("./logger");
+const {
+  buildAccessTokenSignOptions,
+  buildRefreshTokenSignOptions,
+} = require("./jwt-config");
 
-/**
- * Genera Access Token (corta duración - 30 minutos)
- * Se usa para autenticar peticiones normales
- */
-const generarAccessToken = (uid = "") => {
-  return new Promise((resolve, reject) => {
-    const payload = { uid };
-
+const generarAccessToken = (uid = "") =>
+  new Promise((resolve, reject) => {
     jwt.sign(
-      payload,
+      { uid, type: "access" },
       process.env.SECRETORPRIVATEKEY,
-      {
-        expiresIn: "30m", // 30 minutos
-      },
+      buildAccessTokenSignOptions(),
       (err, token) => {
         if (err) {
           logger.error("Error al generar access token", {
@@ -23,28 +19,20 @@ const generarAccessToken = (uid = "") => {
             uid,
           });
           reject(new Error("No se pudo generar el access token"));
-        } else {
-          resolve(token);
+          return;
         }
-      }
+
+        resolve(token);
+      },
     );
   });
-};
 
-/**
- * Genera Refresh Token (larga duración - 30 días)
- * Se usa SOLO para renovar el access token
- */
-const generarRefreshToken = (uid = "") => {
-  return new Promise((resolve, reject) => {
-    const payload = { uid, type: "refresh" };
-
+const generarRefreshToken = (uid = "") =>
+  new Promise((resolve, reject) => {
     jwt.sign(
-      payload,
-      process.env.REFRESH_SECRET, // Secret diferente por seguridad
-      {
-        expiresIn: "30d", // 30 días
-      },
+      { uid, type: "refresh" },
+      process.env.REFRESH_SECRET,
+      buildRefreshTokenSignOptions(),
       (err, token) => {
         if (err) {
           logger.error("Error al generar refresh token", {
@@ -53,13 +41,13 @@ const generarRefreshToken = (uid = "") => {
             uid,
           });
           reject(new Error("No se pudo generar el refresh token"));
-        } else {
-          resolve(token);
+          return;
         }
-      }
+
+        resolve(token);
+      },
     );
   });
-};
 
 module.exports = {
   generarAccessToken,

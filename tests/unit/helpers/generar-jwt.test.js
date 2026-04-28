@@ -14,6 +14,7 @@ describe("generarAccessToken", () => {
     expect(typeof token).toBe("string");
     const decoded = jwt.decode(token);
     expect(decoded.uid).toBe("user-id-123");
+    expect(decoded.type).toBe("access");
   });
 
   test("expira en aproximadamente 30 minutos", async () => {

@@ -3,6 +3,8 @@ const cors = require("cors");
 const helmet = require("helmet");
 const compression = require("compression");
 const rateLimit = require("express-rate-limit");
+const crypto = require("crypto");
+const mongoose = require("mongoose");
 const logger = require("./helpers/logger");
 
 const authRoutes = require("./routes/auth");
@@ -47,6 +49,32 @@ const createLimiter = ({ development = {}, production = {}, ...baseConfig }) =>
     ...(process.env.NODE_ENV === "production" ? production : development),
   });
 
+const getAllowedOrigins = (testMode) => {
+  if (testMode) return "*";
+
+  const origenesPorDefecto = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://perdidosyadopciones.com.ar",
+    "https://www.perdidosyadopciones.com.ar",
+  ];
+
+  const origenesDesdeEnv = (process.env.ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  const origenes = origenesDesdeEnv.length > 0 ? origenesDesdeEnv : origenesPorDefecto;
+  return (origin, callback) => {
+    if (!origin || origenes.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error("Origen no permitido por CORS"));
+  };
+};
+
 const createApp = ({ testMode = false } = {}) => {
   const app = express();
 
@@ -70,17 +98,11 @@ const createApp = ({ testMode = false } = {}) => {
 
   app.use(
     cors({
-      origin: testMode
-        ? "*"
-        : [
-            "http://localhost:5173",
-            "http://localhost:3000",
-            "https://perdidosyadopciones.com.ar",
-            "https://www.perdidosyadopciones.com.ar",
-          ],
+      origin: getAllowedOrigins(testMode),
       credentials: true,
       methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "x-token", "Authorization"],
+      allowedHeaders: ["Content-Type", "x-token", "Authorization", "X-Request-Id"],
+      exposedHeaders: ["X-Request-Id"],
     }),
   );
 
@@ -195,6 +217,11 @@ const createApp = ({ testMode = false } = {}) => {
     next();
   });
   app.use((req, res, next) => {
+    req.requestId = req.header("X-Request-Id") || crypto.randomUUID();
+    res.setHeader("X-Request-Id", req.requestId);
+    next();
+  });
+  app.use((req, res, next) => {
     if (req.body) sanitize(req.body, req);
     if (req.query) sanitize(req.query, req);
     if (req.params) sanitize(req.params, req);
@@ -202,6 +229,17 @@ const createApp = ({ testMode = false } = {}) => {
   });
 
   if (!testMode) {
+    app.get("/health", (_req, res) => {
+      const databaseOnline = mongoose.connection.readyState === 1;
+      const status = databaseOnline ? 200 : 503;
+
+      res.status(status).json({
+        success: databaseOnline,
+        status: databaseOnline ? "ok" : "degraded",
+        database: databaseOnline ? "online" : "offline",
+      });
+    });
+
     app.use("/api/auth", (req, res, next) => {
       res.set({
         "Cache-Control": "no-store, no-cache, must-revalidate, private",

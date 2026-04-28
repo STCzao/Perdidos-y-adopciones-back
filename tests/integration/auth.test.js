@@ -57,12 +57,13 @@ describe("service/auth — integración", () => {
 
   // ─── forgotPassword ─────────────────────────────────────────────────────────
   describe("forgotPassword", () => {
-    test("guarda resetToken en DB cuando el usuario existe", async () => {
+    test("guarda el hash del resetToken en DB cuando el usuario existe", async () => {
       const user = await createUser();
       await authService.forgotPassword({ correo: user.correo, ip: "::1" });
 
       const updated = await Usuario.findById(user._id);
       expect(updated.resetToken).toBeDefined();
+      expect(updated.resetToken).not.toBe("mock-reset-token-hex");
       expect(updated.resetTokenExp.getTime()).toBeGreaterThan(Date.now());
       expect(enviarEmail).toHaveBeenCalledTimes(1);
     });
@@ -81,8 +82,9 @@ describe("service/auth — integración", () => {
 
       // Simular que tiene un resetToken válido
       const token = "valid-test-token-12345";
+      const tokenHash = require("crypto").createHash("sha256").update(token).digest("hex");
       await Usuario.findByIdAndUpdate(user._id, {
-        resetToken: token,
+        resetToken: tokenHash,
         resetTokenExp: Date.now() + 3600000,
         refreshTokens: [{ token: "old-rt", device: "D", ip: "::1" }],
       });

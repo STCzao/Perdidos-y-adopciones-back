@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>19/19</span>
+                <span class='fraction'>20/20</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>19/19</span>
+                <span class='fraction'>20/20</span>
             </div>
         
             
@@ -118,32 +118,16 @@
 <a name='L53'></a><a href='#L53'>53</a>
 <a name='L54'></a><a href='#L54'>54</a>
 <a name='L55'></a><a href='#L55'>55</a>
-<a name='L56'></a><a href='#L56'>56</a>
-<a name='L57'></a><a href='#L57'>57</a>
-<a name='L58'></a><a href='#L58'>58</a>
-<a name='L59'></a><a href='#L59'>59</a>
-<a name='L60'></a><a href='#L60'>60</a>
-<a name='L61'></a><a href='#L61'>61</a>
-<a name='L62'></a><a href='#L62'>62</a>
-<a name='L63'></a><a href='#L63'>63</a>
-<a name='L64'></a><a href='#L64'>64</a>
-<a name='L65'></a><a href='#L65'>65</a>
-<a name='L66'></a><a href='#L66'>66</a>
-<a name='L67'></a><a href='#L67'>67</a>
-<a name='L68'></a><a href='#L68'>68</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">2x</span>
+<a name='L56'></a><a href='#L56'>56</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -155,26 +139,18 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -185,10 +161,10 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -199,21 +175,17 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const jwt = require("jsonwebtoken");
 const logger = require("./logger");
+const {
+  buildAccessTokenSignOptions,
+  buildRefreshTokenSignOptions,
+} = require("./jwt-config");
 &nbsp;
-/**
- * Genera Access Token (corta duración - 30 minutos)
- * Se usa para autenticar peticiones normales
- */
-const generarAccessToken = (uid = <span class="branch-0 cbranch-no" title="branch not covered" >"")</span> =&gt; {
-  return new Promise((resolve, reject) =&gt; {
-    const payload = { uid };
-&nbsp;
+const generarAccessToken = (uid = <span class="branch-0 cbranch-no" title="branch not covered" >"")</span> =&gt;
+  new Promise((resolve, reject) =&gt; {
     jwt.sign(
-      payload,
+      { uid, type: "access" },
       process.env.SECRETORPRIVATEKEY,
-      {
-        expiresIn: "30m", // 30 minutos
-      },
+      buildAccessTokenSignOptions(),
       (err, token) =&gt; {
         if (err) {
           logger.error("Error al generar access token", {
@@ -222,28 +194,20 @@ const generarAccessToken = (uid = <span class="branch-0 cbranch-no" title="branc
             uid,
           });
           reject(new Error("No se pudo generar el access token"));
-        } else {
-          resolve(token);
+          return;
         }
-      }
+&nbsp;
+        resolve(token);
+      },
     );
   });
-};
 &nbsp;
-/**
- * Genera Refresh Token (larga duración - 30 días)
- * Se usa SOLO para renovar el access token
- */
-const generarRefreshToken = (uid = <span class="branch-0 cbranch-no" title="branch not covered" >"")</span> =&gt; {
-  return new Promise((resolve, reject) =&gt; {
-    const payload = { uid, type: "refresh" };
-&nbsp;
+const generarRefreshToken = (uid = <span class="branch-0 cbranch-no" title="branch not covered" >"")</span> =&gt;
+  new Promise((resolve, reject) =&gt; {
     jwt.sign(
-      payload,
-      process.env.REFRESH_SECRET, // Secret diferente por seguridad
-      {
-        expiresIn: "30d", // 30 días
-      },
+      { uid, type: "refresh" },
+      process.env.REFRESH_SECRET,
+      buildRefreshTokenSignOptions(),
       (err, token) =&gt; {
         if (err) {
           logger.error("Error al generar refresh token", {
@@ -252,13 +216,13 @@ const generarRefreshToken = (uid = <span class="branch-0 cbranch-no" title="bran
             uid,
           });
           reject(new Error("No se pudo generar el refresh token"));
-        } else {
-          resolve(token);
+          return;
         }
-      }
+&nbsp;
+        resolve(token);
+      },
     );
   });
-};
 &nbsp;
 module.exports = {
   generarAccessToken,
@@ -271,7 +235,7 @@ module.exports = {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-04-28T00:07:57.478Z
+                at 2026-04-28T00:27:30.177Z
             </div>
         <script src="../prettify.js"></script>
         <script>

@@ -4,9 +4,9 @@ const findByCorreo = (correo) => Usuario.findOne({ correo });
 
 const findById = (id) => Usuario.findById(id);
 
-const findByResetToken = (token) =>
+const findByResetTokenHash = (resetTokenHash) =>
   Usuario.findOne({
-    resetToken: token,
+    resetToken: resetTokenHash,
     resetTokenExp: { $gt: Date.now() },
   });
 
@@ -15,6 +15,6 @@ const save = (usuario) => usuario.save();
 module.exports = {
   findByCorreo,
   findById,
-  findByResetToken,
+  findByResetTokenHash,
   save,
 };

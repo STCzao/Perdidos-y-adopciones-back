@@ -17,6 +17,16 @@ const dbConnection = async () => {
   }
 };
 
+const dbDisconnection = async () => {
+  if (mongoose.connection.readyState === 0) {
+    return;
+  }
+
+  await mongoose.connection.close();
+  logger.info("Base de datos desconectada");
+};
+
 module.exports = {
   dbConnection,
+  dbDisconnection,
 };

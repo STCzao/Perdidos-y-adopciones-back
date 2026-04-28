@@ -6,6 +6,9 @@ const { enviarEmail } = require("../helpers/enviar-mails");
 const logger = require("../helpers/logger");
 const AppError = require("../helpers/AppError");
 const authRepository = require("../repositories/authRepository");
+const { buildRefreshTokenVerifyOptions } = require("../helpers/jwt-config");
+
+const hashResetToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
 
 const login = async ({ correo, password, userAgent, ip }) => {
   const usuario = await authRepository.findByCorreo(correo);
@@ -68,6 +71,7 @@ const forgotPassword = async ({ correo, ip }) => {
   }
 
   const token = crypto.randomBytes(32).toString("hex");
+  const resetTokenHash = hashResetToken(token);
   const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${token}`;
 
   // Enviar email ANTES de persistir el token — si falla, no queda token huérfano en DB
@@ -80,7 +84,7 @@ const forgotPassword = async ({ correo, ip }) => {
      <p>Este enlace expirará en 1 hora.</p>`
   );
 
-  usuario.resetToken = token;
+  usuario.resetToken = resetTokenHash;
   usuario.resetTokenExp = Date.now() + 3600000; // 1 hora
   await authRepository.save(usuario);
 
@@ -90,7 +94,7 @@ const forgotPassword = async ({ correo, ip }) => {
 };
 
 const resetPassword = async ({ token, password, ip }) => {
-  const usuario = await authRepository.findByResetToken(token);
+  const usuario = await authRepository.findByResetTokenHash(hashResetToken(token));
 
   if (!usuario) {
     logger.warn("Intento de reset con token inválido o expirado", {
@@ -125,7 +129,11 @@ const renovarToken = async ({ refreshToken, userAgent, ip }) => {
 
   let uid;
   try {
-    const { uid: userId, type } = jwt.verify(refreshToken, process.env.REFRESH_SECRET);
+    const { uid: userId, type } = jwt.verify(
+      refreshToken,
+      process.env.REFRESH_SECRET,
+      buildRefreshTokenVerifyOptions(),
+    );
     if (type !== "refresh") throw new Error("Token inválido");
     uid = userId;
   } catch (error) {

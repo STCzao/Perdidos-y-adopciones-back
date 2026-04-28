@@ -12,6 +12,7 @@ const mockReq = (overrides = {}) => ({
   method: "GET",
   originalUrl: "/api/test",
   ip: "::1",
+  requestId: "req-test-123",
   usuario: null,
   ...overrides,
 });
@@ -64,6 +65,7 @@ describe("errorHandler", () => {
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json.mock.calls[0][0]).toEqual({
       success: false,
+      requestId: "req-test-123",
       msg: "Error de validación",
       errors: { nombre: "El nombre es obligatorio", correo: "Correo inválido" },
     });

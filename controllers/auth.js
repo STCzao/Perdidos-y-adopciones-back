@@ -5,8 +5,11 @@ const buildRefreshCookieOptions = () => ({
   secure: process.env.NODE_ENV === "production",
   sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
   maxAge: 30 * 24 * 60 * 60 * 1000,
-  path: "/",
+  path: "/api/auth",
+  ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
 });
+
+const omitRefreshToken = ({ refreshToken, ...payload }) => payload;
 
 const login = async (req, res, next) => {
   try {
@@ -17,7 +20,7 @@ const login = async (req, res, next) => {
       ip: req.ip,
     });
     res.cookie("refreshToken", result.refreshToken, buildRefreshCookieOptions());
-    res.json({ success: true, ...result });
+    res.json({ success: true, ...omitRefreshToken(result) });
   } catch (error) {
     next(error);
   }
@@ -56,7 +59,7 @@ const refreshToken = async (req, res, next) => {
       ip: req.ip,
     });
     res.cookie("refreshToken", result.refreshToken, buildRefreshCookieOptions());
-    res.json({ success: true, ...result });
+    res.json({ success: true, ...omitRefreshToken(result) });
   } catch (error) {
     next(error);
   }
