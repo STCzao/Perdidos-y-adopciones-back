@@ -157,18 +157,23 @@ const renovarToken = async ({ refreshToken, userAgent, ip }) => {
 
   if (!tokenExiste) {
     const tokensActuales = usuario.refreshTokens?.length || 0;
+    const isProduction = process.env.NODE_ENV === "production";
     logger.warn("Refresh token no encontrado en DB", {
       correo: usuario.correo,
       ip,
       tokensActuales,
       motivo: tokensActuales === 0 ? "Usuario cerró sesión previamente" : "Posible robo de token",
     });
-    usuario.refreshTokens = [];
-    await authRepository.save(usuario);
-    throw new AppError(
-      "Refresh token inválido. Por seguridad, cierra sesión en todos tus dispositivos.",
-      401
-    );
+    if (isProduction) {
+      // En producción, invalidamos todas las sesiones ante posible robo de token
+      usuario.refreshTokens = [];
+      await authRepository.save(usuario);
+      throw new AppError(
+        "Refresh token inválido. Por seguridad, cierra sesión en todos tus dispositivos.",
+        401
+      );
+    }
+    throw new AppError("Refresh token inválido o expirado", 401);
   }
 
   const [newAccessToken, newRefreshToken] = await Promise.all([
