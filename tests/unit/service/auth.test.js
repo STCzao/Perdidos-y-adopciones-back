@@ -4,6 +4,10 @@ jest.mock("bcryptjs");
 jest.mock("jsonwebtoken");
 jest.mock("crypto", () => ({
   randomBytes: jest.fn(() => ({ toString: jest.fn().mockReturnValue("mock-reset-token-hex") })),
+  createHash: jest.fn(() => ({
+    update: jest.fn().mockReturnThis(),
+    digest: jest.fn().mockReturnValue("hashed-reset-token"),
+  })),
 }));
 jest.mock("../../../helpers/generar-jwt");
 jest.mock("../../../helpers/enviar-mails");
@@ -163,7 +167,7 @@ describe("service/auth", () => {
 
       expect(enviarEmail).toHaveBeenCalledTimes(1);
       expect(mockUser.save).toHaveBeenCalledTimes(1);
-      expect(mockUser.resetToken).toBeDefined();
+      expect(mockUser.resetToken).toBe("hashed-reset-token");
       expect(mockUser.resetTokenExp).toBeDefined();
     });
 
@@ -194,7 +198,7 @@ describe("service/auth", () => {
     test("hashea la nueva contraseña e invalida todos los refreshTokens", async () => {
       const mockUser = makeMockUser({
         refreshTokens: [{ token: "t1" }, { token: "t2" }],
-        resetToken: "valid-token",
+        resetToken: "hashed-reset-token",
         resetTokenExp: Date.now() + 3600000,
       });
       Usuario.findOne.mockResolvedValue(mockUser);
@@ -211,7 +215,10 @@ describe("service/auth", () => {
     });
 
     test("retorna mensaje de éxito", async () => {
-      const mockUser = makeMockUser({ resetToken: "v", resetTokenExp: Date.now() + 3600000 });
+      const mockUser = makeMockUser({
+        resetToken: "hashed-reset-token",
+        resetTokenExp: Date.now() + 3600000,
+      });
       Usuario.findOne.mockResolvedValue(mockUser);
       bcryptjs.genSaltSync.mockReturnValue("salt");
       bcryptjs.hashSync.mockReturnValue("hashed");

@@ -29,7 +29,7 @@ describe("E2E: /api/auth", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.accessToken).toBeDefined();
-      expect(res.body.refreshToken).toBeDefined();
+      expect(res.body.refreshToken).toBeUndefined();
       expect(res.headers["set-cookie"]).toBeDefined();
     });
 
@@ -123,7 +123,7 @@ describe("E2E: /api/auth", () => {
       const rawToken = crypto.randomBytes(32).toString("hex");
 
       await Usuario.findByIdAndUpdate(user._id, {
-        resetToken: rawToken,
+        resetToken: crypto.createHash("sha256").update(rawToken).digest("hex"),
         resetTokenExp: Date.now() + 30 * 60 * 1000,
       });
 
@@ -156,7 +156,8 @@ describe("E2E: /api/auth", () => {
 
       const res = await request(app)
         .post("/api/auth/refresh")
-        .send({ refreshToken: loginRes.body.refreshToken });
+        .set("Cookie", loginRes.headers["set-cookie"])
+        .send({});
 
       expect(res.status).toBe(200);
       expect(res.body.accessToken).toBeDefined();
@@ -210,7 +211,8 @@ describe("E2E: /api/auth", () => {
       const res = await request(app)
         .post("/api/auth/logout")
         .set("x-token", loginRes.body.accessToken)
-        .send({ refreshToken: loginRes.body.refreshToken });
+        .set("Cookie", loginRes.headers["set-cookie"])
+        .send({});
 
       expect(res.status).toBe(200);
       expect(res.headers["set-cookie"]).toBeDefined();

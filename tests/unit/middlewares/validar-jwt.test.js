@@ -10,6 +10,9 @@ const jwt = require("jsonwebtoken");
 const { validarJWT } = require("../../../middlewares/validar-jwt");
 const Usuario = require("../../../models/usuario");
 const AppError = require("../../../helpers/AppError");
+const {
+  buildAccessTokenSignOptions,
+} = require("../../../helpers/jwt-config");
 
 const buildRes = () => {
   const res = {};
@@ -43,7 +46,11 @@ describe("validarJWT", () => {
   });
 
   test("llama next(AppError 401) cuando el usuario no existe en DB", async () => {
-    const token = jwt.sign({ uid: "uid123" }, process.env.SECRETORPRIVATEKEY);
+    const token = jwt.sign(
+      { uid: "uid123", type: "access" },
+      process.env.SECRETORPRIVATEKEY,
+      buildAccessTokenSignOptions(),
+    );
     const req = buildReq(token);
     Usuario.findById.mockResolvedValue(null);
     const next = jest.fn();
@@ -53,7 +60,11 @@ describe("validarJWT", () => {
   });
 
   test("llama next(AppError 401) cuando el usuario está inhabilitado", async () => {
-    const token = jwt.sign({ uid: "uid123" }, process.env.SECRETORPRIVATEKEY);
+    const token = jwt.sign(
+      { uid: "uid123", type: "access" },
+      process.env.SECRETORPRIVATEKEY,
+      buildAccessTokenSignOptions(),
+    );
     const req = buildReq(token);
     Usuario.findById.mockResolvedValue({ _id: "uid123", estado: false });
     const next = jest.fn();
@@ -64,7 +75,11 @@ describe("validarJWT", () => {
 
   test("adjunta req.usuario y llama next() en token válido", async () => {
     const mockUser = { _id: "uid123", estado: true, rol: "USER_ROLE" };
-    const token = jwt.sign({ uid: "uid123" }, process.env.SECRETORPRIVATEKEY);
+    const token = jwt.sign(
+      { uid: "uid123", type: "access" },
+      process.env.SECRETORPRIVATEKEY,
+      buildAccessTokenSignOptions(),
+    );
     const req = buildReq(token);
     Usuario.findById.mockResolvedValue(mockUser);
     const next = jest.fn();

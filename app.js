@@ -3,6 +3,8 @@ const cors = require("cors");
 const helmet = require("helmet");
 const compression = require("compression");
 const rateLimit = require("express-rate-limit");
+const crypto = require("crypto");
+const mongoose = require("mongoose");
 const logger = require("./helpers/logger");
 
 const authRoutes = require("./routes/auth");
@@ -41,6 +43,38 @@ const parseCookies = (cookieHeader = "") =>
     return acc;
   }, {});
 
+const createLimiter = ({ development = {}, production = {}, ...baseConfig }) =>
+  rateLimit({
+    ...baseConfig,
+    ...(process.env.NODE_ENV === "production" ? production : development),
+  });
+
+const getAllowedOrigins = (testMode) => {
+  if (testMode) return "*";
+
+  const origenesPorDefecto = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://perdidosyadopciones.com.ar",
+    "https://www.perdidosyadopciones.com.ar",
+  ];
+
+  const origenesDesdeEnv = (process.env.ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  const origenes = origenesDesdeEnv.length > 0 ? origenesDesdeEnv : origenesPorDefecto;
+  return (origin, callback) => {
+    if (!origin || origenes.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error("Origen no permitido por CORS"));
+  };
+};
+
 const createApp = ({ testMode = false } = {}) => {
   const app = express();
 
@@ -64,99 +98,115 @@ const createApp = ({ testMode = false } = {}) => {
 
   app.use(
     cors({
-      origin: testMode
-        ? "*"
-        : [
-            "http://localhost:5173",
-            "http://localhost:3000",
-            "https://perdidosyadopciones.com.ar",
-            "https://www.perdidosyadopciones.com.ar",
-          ],
+      origin: getAllowedOrigins(testMode),
       credentials: true,
       methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "x-token", "Authorization"],
+      allowedHeaders: ["Content-Type", "x-token", "Authorization", "X-Request-Id"],
+      exposedHeaders: ["X-Request-Id"],
     }),
   );
-
-  app.use((req, res, next) => {
-    if (req.body) sanitize(req.body, req);
-    if (req.query) sanitize(req.query, req);
-    if (req.params) sanitize(req.params, req);
-    next();
-  });
 
   if (testMode) {
     app.use(rateLimit({ windowMs: 60_000, max: 10_000 }));
   } else {
     app.use(
       "/api/auth/login",
-      rateLimit({
+      createLimiter({
         windowMs: 15 * 60 * 1000,
-        max: 10,
         message: {
           success: false,
           msg: "Demasiados intentos de inicio de sesion. Por favor, intente nuevamente despues de 15 minutos.",
         },
         standardHeaders: true,
         legacyHeaders: false,
+        production: {
+          max: 10,
+        },
+        development: {
+          max: 100,
+          skipFailedRequests: true,
+        },
       }),
     );
 
     app.use(
       "/api/auth/forgot-password",
-      rateLimit({
+      createLimiter({
         windowMs: 15 * 60 * 1000,
-        max: 3,
         message: {
           success: false,
           msg: "Demasiadas solicitudes de restablecimiento de contrasena. Por favor, intente nuevamente despues de 15 minutos.",
         },
         standardHeaders: true,
         legacyHeaders: false,
+        production: {
+          max: 3,
+        },
+        development: {
+          max: 20,
+          skipFailedRequests: true,
+        },
       }),
     );
 
     app.use(
       "/api/auth/refresh",
-      rateLimit({
+      createLimiter({
         windowMs: 5 * 60 * 1000,
-        max: 30,
         message: {
           success: false,
           msg: "Demasiados intentos de renovacion de token. Por favor, intente nuevamente despues de 5 minutos.",
         },
         standardHeaders: true,
         legacyHeaders: false,
-        skipSuccessfulRequests: true,
+        production: {
+          max: 30,
+          skipSuccessfulRequests: true,
+        },
+        development: {
+          max: 120,
+          skipFailedRequests: true,
+        },
       }),
     );
 
     app.use(
       "/api/usuarios/mi-perfil",
-      rateLimit({
+      createLimiter({
         windowMs: 1 * 60 * 1000,
-        max: 60,
         message: {
           success: false,
           msg: "Demasiadas solicitudes de perfil. Por favor, intente nuevamente mas tarde.",
         },
         standardHeaders: true,
         legacyHeaders: false,
-        skipSuccessfulRequests: true,
+        production: {
+          max: 60,
+          skipSuccessfulRequests: true,
+        },
+        development: {
+          max: 300,
+          skipFailedRequests: true,
+        },
       }),
     );
 
     app.use(
       "/api/",
-      rateLimit({
+      createLimiter({
         windowMs: 1 * 60 * 1000,
-        max: 100,
         message: {
           success: false,
           msg: "Demasiadas solicitudes. Por favor, intente nuevamente mas tarde.",
         },
         standardHeaders: true,
         legacyHeaders: false,
+        production: {
+          max: 100,
+        },
+        development: {
+          max: 1000,
+        },
       }),
     );
   }
@@ -166,8 +216,30 @@ const createApp = ({ testMode = false } = {}) => {
     req.cookies = parseCookies(req.headers.cookie);
     next();
   });
+  app.use((req, res, next) => {
+    req.requestId = req.header("X-Request-Id") || crypto.randomUUID();
+    res.setHeader("X-Request-Id", req.requestId);
+    next();
+  });
+  app.use((req, res, next) => {
+    if (req.body) sanitize(req.body, req);
+    if (req.query) sanitize(req.query, req);
+    if (req.params) sanitize(req.params, req);
+    next();
+  });
 
   if (!testMode) {
+    app.get("/health", (_req, res) => {
+      const databaseOnline = mongoose.connection.readyState === 1;
+      const status = databaseOnline ? 200 : 503;
+
+      res.status(status).json({
+        success: databaseOnline,
+        status: databaseOnline ? "ok" : "degraded",
+        database: databaseOnline ? "online" : "offline",
+      });
+    });
+
     app.use("/api/auth", (req, res, next) => {
       res.set({
         "Cache-Control": "no-store, no-cache, must-revalidate, private",

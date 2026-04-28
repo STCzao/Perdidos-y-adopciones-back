@@ -1,17 +1,15 @@
-const Comunidad = require("../models/comunidad");
 const logger = require("../helpers/logger");
 const AppError = require("../helpers/AppError");
 const { normalizarTexto } = require("../helpers/normalizar-texto");
+const comunidadRepository = require("../repositories/comunidadRepository");
 
 const getComunidades = async () => {
-  const comunidades = await Comunidad.find()
-    .populate("usuario", "nombre img rol")
-    .sort({ fechaCreacion: -1 });
+  const comunidades = await comunidadRepository.findAll();
   return { comunidades };
 };
 
 const getComunidadById = async ({ id }) => {
-  const post = await Comunidad.findById(id).populate("usuario", "nombre img rol");
+  const post = await comunidadRepository.findById(id);
 
   if (!post) {
     throw new AppError("Publicacion no encontrada", 404);
@@ -31,9 +29,9 @@ const crearComunidad = async ({ body, usuarioActual, ip }) => {
     usuario: usuarioActual._id,
   };
 
-  const comunidad = new Comunidad(data);
-  const comunidadDB = await comunidad.save();
-  await comunidadDB.populate("usuario", "nombre img rol");
+  const comunidad = comunidadRepository.create(data);
+  const comunidadDB = await comunidadRepository.save(comunidad);
+  await comunidadRepository.populateUsuario(comunidadDB);
 
   logger.info("Publicación de comunidad creada", {
     titulo: data.titulo,
@@ -54,10 +52,10 @@ const actualizarComunidad = async ({ id, body, usuarioActual, ip }) => {
   if (categoria) data.categoria = normalizarTexto(categoria);
   if (img) data.img = img.toLowerCase();
 
-  const editado = await Comunidad.findByIdAndUpdate(id, data, {
+  const editado = await comunidadRepository.findByIdAndUpdate(id, data, {
     new: true,
     runValidators: true,
-  }).populate("usuario", "nombre img rol");
+  });
 
   if (!editado) {
     throw new AppError("Publicacion no encontrada", 404);
@@ -73,7 +71,7 @@ const actualizarComunidad = async ({ id, body, usuarioActual, ip }) => {
 };
 
 const eliminarComunidad = async ({ id, usuarioActual, ip }) => {
-  const eliminado = await Comunidad.findByIdAndDelete(id);
+  const eliminado = await comunidadRepository.findByIdAndDelete(id);
 
   if (!eliminado) {
     throw new AppError("Publicacion no encontrada", 404);
