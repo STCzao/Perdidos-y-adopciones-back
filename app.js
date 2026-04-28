@@ -8,6 +8,7 @@ const mongoose = require("mongoose");
 const logger = require("./helpers/logger");
 
 const authRoutes = require("./routes/auth");
+const cloudinaryRoutes = require("./routes/cloudinary");
 const userRoutes = require("./routes/usuarios");
 const publicationRoutes = require("./routes/publicaciones");
 const communityRoutes = require("./routes/comunidad");
@@ -171,6 +172,25 @@ const createApp = ({ testMode = false } = {}) => {
     );
 
     app.use(
+      "/api/cloudinary/signature",
+      createLimiter({
+        windowMs: 1 * 60 * 1000,
+        message: {
+          success: false,
+          msg: "Demasiadas solicitudes de firma. Por favor, intente nuevamente mas tarde.",
+        },
+        standardHeaders: true,
+        legacyHeaders: false,
+        production: {
+          max: 20,
+        },
+        development: {
+          max: 200,
+        },
+      }),
+    );
+
+    app.use(
       "/api/usuarios/mi-perfil",
       createLimiter({
         windowMs: 1 * 60 * 1000,
@@ -253,6 +273,7 @@ const createApp = ({ testMode = false } = {}) => {
   }
 
   app.use("/api/auth", authRoutes);
+  app.use("/api/cloudinary", cloudinaryRoutes);
   app.use("/api/usuarios", userRoutes);
   app.use("/api/publicaciones", publicationRoutes);
   app.use("/api/comunidad", communityRoutes);
