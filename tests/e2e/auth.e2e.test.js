@@ -10,6 +10,15 @@ const Usuario = require("../../models/usuario");
 
 let app;
 
+const expectRefreshCookieAttributes = (setCookieHeader) => {
+  expect(setCookieHeader).toBeDefined();
+  expect(setCookieHeader[0]).toContain("refreshToken=");
+  expect(setCookieHeader[0]).toContain("HttpOnly");
+  expect(setCookieHeader[0]).toContain("Secure");
+  expect(setCookieHeader[0]).toContain("SameSite=None");
+  expect(setCookieHeader[0]).toContain("Path=/api/auth/refresh");
+};
+
 describe("E2E: /api/auth", () => {
   beforeAll(async () => {
     await db.connect();
@@ -30,7 +39,7 @@ describe("E2E: /api/auth", () => {
       expect(res.status).toBe(200);
       expect(res.body.accessToken).toBeDefined();
       expect(res.body.refreshToken).toBeUndefined();
-      expect(res.headers["set-cookie"]).toBeDefined();
+      expectRefreshCookieAttributes(res.headers["set-cookie"]);
     });
 
     test("400 con contraseña incorrecta", async () => {
@@ -179,7 +188,7 @@ describe("E2E: /api/auth", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.accessToken).toBeDefined();
-      expect(res.headers["set-cookie"]).toBeDefined();
+      expectRefreshCookieAttributes(res.headers["set-cookie"]);
     });
 
     test("401 con refreshToken inválido", async () => {
@@ -215,7 +224,7 @@ describe("E2E: /api/auth", () => {
         .send({});
 
       expect(res.status).toBe(200);
-      expect(res.headers["set-cookie"]).toBeDefined();
+      expectRefreshCookieAttributes(res.headers["set-cookie"]);
     });
 
     test("401 sin token de autenticación", async () => {
