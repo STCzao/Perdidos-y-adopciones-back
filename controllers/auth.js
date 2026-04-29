@@ -2,10 +2,10 @@ const authService = require("../service/auth");
 
 const buildRefreshCookieOptions = () => ({
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  secure: true,
+  sameSite: "none",
   maxAge: 30 * 24 * 60 * 60 * 1000,
-  path: "/api/auth",
+  path: "/api/auth/refresh",
   ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
 });
 
