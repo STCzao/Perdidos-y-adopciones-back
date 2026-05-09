@@ -20,7 +20,17 @@ const ESTADO_DEFECTO = {
   ADOPCION: "EN BUSCA DE UN HOGAR",
 };
 
-const getPublicaciones = async ({ page = 1, limit = 12, tipo, estado, search }) => {
+const getPublicaciones = async ({
+  page = 1,
+  limit = 12,
+  tipo,
+  estado,
+  search,
+  raza,
+  edad,
+  localidad,
+  sexo,
+}) => {
   const pageNum = Math.max(parseInt(page, 10) || 1, 1);
   const limitNum = Math.min(Math.max(parseInt(limit, 10) || 12, 1), 50);
   const skip = (pageNum - 1) * limitNum;
@@ -33,6 +43,11 @@ const getPublicaciones = async ({ page = 1, limit = 12, tipo, estado, search }) 
     const estadoNorm = normalizarTexto(estado);
     if (ESTADOS_PUBLICOS.includes(estadoNorm)) query.estado = estadoNorm;
   }
+
+  if (raza) query.raza = normalizarTexto(raza);
+  if (edad) query.edad = normalizarTexto(edad);
+  if (localidad) query.localidad = normalizarTexto(localidad);
+  if (sexo) query.sexo = normalizarTexto(sexo);
 
   if (search) {
     const searchSeguro = escaparRegex(search.slice(0, 100));

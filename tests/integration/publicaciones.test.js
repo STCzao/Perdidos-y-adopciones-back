@@ -203,6 +203,78 @@ describe("service/publicaciones — integración", () => {
       expect(result.publicaciones).toHaveLength(2);
       expect(result.totalPages).toBe(3);
     });
+
+    test("filtra por raza y retorna solo los que coinciden", async () => {
+      const user = await createUser();
+      await createPublicacion(user._id, { raza: "GOLDEN RETRIEVER", estado: "SE BUSCA" });
+      await createPublicacion(user._id, { raza: "MESTIZO", estado: "SE BUSCA" });
+
+      const result = await publicacionService.getPublicaciones({ raza: "golden retriever" });
+      expect(result.total).toBe(1);
+      expect(result.publicaciones[0].raza).toBe("GOLDEN RETRIEVER");
+    });
+
+    test("filtra por sexo y retorna solo los que coinciden", async () => {
+      const user = await createUser();
+      await createPublicacion(user._id, { sexo: "MACHO", estado: "SE BUSCA" });
+      await createPublicacion(user._id, { sexo: "HEMBRA", estado: "SE BUSCA" });
+
+      const result = await publicacionService.getPublicaciones({ sexo: "hembra" });
+      expect(result.total).toBe(1);
+      expect(result.publicaciones[0].sexo).toBe("HEMBRA");
+    });
+
+    test("filtra por edad y retorna solo los que coinciden", async () => {
+      const user = await createUser();
+      await createPublicacion(user._id, { edad: "CACHORRO", estado: "SE BUSCA" });
+      await createPublicacion(user._id, { edad: "ADULTO", estado: "SE BUSCA" });
+
+      const result = await publicacionService.getPublicaciones({ edad: "cachorro" });
+      expect(result.total).toBe(1);
+      expect(result.publicaciones[0].edad).toBe("CACHORRO");
+    });
+
+    test("filtra por localidad en publicaciones PERDIDO/ENCONTRADO", async () => {
+      const user = await createUser();
+      await createPublicacion(user._id, {
+        localidad: "SAN MIGUEL DE TUCUMAN",
+        estado: "SE BUSCA",
+      });
+      await createPublicacion(user._id, { localidad: "LULES", estado: "SE BUSCA" });
+
+      const result = await publicacionService.getPublicaciones({ localidad: "lules" });
+      expect(result.total).toBe(1);
+      expect(result.publicaciones[0].localidad).toBe("LULES");
+    });
+
+    test("combinación tipo + raza + sexo reduce correctamente el resultado", async () => {
+      const user = await createUser();
+      await createPublicacion(user._id, {
+        tipo: "PERDIDO",
+        raza: "MESTIZO",
+        sexo: "MACHO",
+        estado: "SE BUSCA",
+      });
+      await createPublicacion(user._id, {
+        tipo: "PERDIDO",
+        raza: "MESTIZO",
+        sexo: "HEMBRA",
+        estado: "SE BUSCA",
+      });
+      await createPublicacion(user._id, {
+        tipo: "PERDIDO",
+        raza: "GOLDEN RETRIEVER",
+        sexo: "MACHO",
+        estado: "SE BUSCA",
+      });
+
+      const result = await publicacionService.getPublicaciones({
+        tipo: "perdido",
+        raza: "mestizo",
+        sexo: "macho",
+      });
+      expect(result.total).toBe(1);
+    });
   });
 
   // ─── getPublicacion ──────────────────────────────────────────────────────────
