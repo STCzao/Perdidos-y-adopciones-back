@@ -310,6 +310,7 @@ describe("service/auth", () => {
 
       expect(result.accessToken).toBe("new-access");
       expect(result.refreshToken).toBe("new-refresh");
+      expect(result.usuario).toBe(mockUser);
       expect(mockUser.refreshTokens.some((t) => t.token === "old-rt")).toBe(false);
       expect(mockUser.refreshTokens.some((t) => t.token === "new-refresh")).toBe(true);
     });

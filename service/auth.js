@@ -191,7 +191,7 @@ const renovarToken = async ({ refreshToken, userAgent, ip }) => {
 
   logger.info("Token renovado exitosamente", { correo: usuario.correo, ip });
 
-  return { accessToken: newAccessToken, refreshToken: newRefreshToken };
+  return { accessToken: newAccessToken, refreshToken: newRefreshToken, usuario };
 };
 
 const logout = async ({ userId, refreshToken, correo, ip }) => {

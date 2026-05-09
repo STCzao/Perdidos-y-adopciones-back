@@ -78,6 +78,47 @@ describe("service/publicaciones", () => {
       // INACTIVO no está en ESTADOS_PUBLICOS, no debe quedar en el query
       expect(query.estado).not.toBe("INACTIVO");
     });
+
+    test("filtra por raza cuando se proporciona", async () => {
+      setupQueryMock([]);
+      await publicacionService.getPublicaciones({ raza: "golden retriever" });
+      const query = Publicacion.countDocuments.mock.calls[0][0];
+      expect(query.raza).toBe("GOLDEN RETRIEVER");
+    });
+
+    test("filtra por edad cuando se proporciona", async () => {
+      setupQueryMock([]);
+      await publicacionService.getPublicaciones({ edad: "cachorro" });
+      const query = Publicacion.countDocuments.mock.calls[0][0];
+      expect(query.edad).toBe("CACHORRO");
+    });
+
+    test("filtra por localidad cuando se proporciona", async () => {
+      setupQueryMock([]);
+      await publicacionService.getPublicaciones({ localidad: "tucuman" });
+      const query = Publicacion.countDocuments.mock.calls[0][0];
+      expect(query.localidad).toBe("TUCUMAN");
+    });
+
+    test("filtra por sexo cuando se proporciona", async () => {
+      setupQueryMock([]);
+      await publicacionService.getPublicaciones({ sexo: "hembra" });
+      const query = Publicacion.countDocuments.mock.calls[0][0];
+      expect(query.sexo).toBe("HEMBRA");
+    });
+
+    test("combina múltiples filtros en el mismo query", async () => {
+      setupQueryMock([]);
+      await publicacionService.getPublicaciones({
+        tipo: "perdido",
+        raza: "mestizo",
+        sexo: "macho",
+      });
+      const query = Publicacion.countDocuments.mock.calls[0][0];
+      expect(query.tipo).toBe("PERDIDO");
+      expect(query.raza).toBe("MESTIZO");
+      expect(query.sexo).toBe("MACHO");
+    });
   });
 
   // ─── getPublicacion ────────────────────────────────────────────────────────
