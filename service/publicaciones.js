@@ -1,13 +1,17 @@
+const ExcelJS = require("exceljs");
 const logger = require("../helpers/logger");
 const AppError = require("../helpers/AppError");
+const { eliminarImagen } = require("../helpers/cloudinary");
 const { normalizarTexto } = require("../helpers/normalizar-texto");
 const publicacionesRepository = require("../repositories/publicacionesRepository");
 
 const escaparRegex = (texto) => texto.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const TAMANIO_KEY = "tama\u00f1o";
 
 const ESTADOS_PUBLICOS = [
   "BUSCANDO A SU FAMILIA",
   "APARECIO SU FAMILIA",
+  "TIENE NUEVA FAMILIA",
   "SE BUSCA",
   "YA APARECIO",
   "EN BUSCA DE UN HOGAR",
@@ -18,6 +22,32 @@ const ESTADO_DEFECTO = {
   PERDIDO: "SE BUSCA",
   ENCONTRADO: "BUSCANDO A SU FAMILIA",
   ADOPCION: "EN BUSCA DE UN HOGAR",
+};
+
+const normalizarImagenes = ({ imgs, img } = {}) => {
+  if (Array.isArray(imgs)) {
+    return imgs.map((imagen) => imagen.trim().toLowerCase());
+  }
+  if (typeof img === "string" && img.trim()) {
+    return [img.trim().toLowerCase()];
+  }
+  return undefined;
+};
+
+const obtenerImagenesPublicacion = (publicacion) => {
+  if (Array.isArray(publicacion?.imgs) && publicacion.imgs.length > 0) {
+    return publicacion.imgs;
+  }
+  if (publicacion?.img) {
+    return [publicacion.img];
+  }
+  return [];
+};
+
+const construirRegexBusqueda = (search) => {
+  const termino = typeof search === "string" ? search.trim().slice(0, 100) : "";
+  if (!termino) return null;
+  return { $regex: escaparRegex(termino), $options: "i" };
 };
 
 const getPublicaciones = async ({
@@ -49,15 +79,12 @@ const getPublicaciones = async ({
   if (localidad) query.localidad = normalizarTexto(localidad);
   if (sexo) query.sexo = normalizarTexto(sexo);
 
-  if (search) {
-    const searchSeguro = escaparRegex(search.slice(0, 100));
-    query.$or = [
-      { raza: { $regex: searchSeguro, $options: "i" } },
-      { detalles: { $regex: searchSeguro, $options: "i" } },
-    ];
-    if (!tipo || tipo.toUpperCase() !== "ADOPCION") {
-      query.$or.push({ localidad: { $regex: searchSeguro, $options: "i" } });
-      query.$or.push({ lugar: { $regex: searchSeguro, $options: "i" } });
+  const regex = construirRegexBusqueda(search);
+  if (regex) {
+    query.$or = [{ raza: regex }, { detalles: regex }];
+    if (!tipo || normalizarTexto(tipo) !== "ADOPCION") {
+      query.$or.push({ localidad: regex });
+      query.$or.push({ lugar: regex });
     }
   }
 
@@ -75,20 +102,46 @@ const getPublicaciones = async ({
   return { publicaciones, total, page: pageNum, totalPages: Math.ceil(total / limitNum) };
 };
 
-const getPublicacionesUsuario = async ({ id, usuarioActual }) => {
+const getPublicacionesUsuario = async ({
+  id,
+  usuarioActual,
+  page = 1,
+  limit = 12,
+  tipo,
+  estado,
+  search,
+}) => {
   const puedeVer = usuarioActual.rol === "ADMIN_ROLE" || usuarioActual._id.toString() === id;
 
   if (!puedeVer) {
     throw new AppError("No tiene permisos para ver estas publicaciones", 403);
   }
 
-  const publicaciones = await publicacionesRepository.find({
-    filter: { usuario: id },
-    populate: { path: "usuario", select: "nombre" },
-    sort: { fechaCreacion: -1 },
-  });
+  const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+  const limitNum = Math.min(Math.max(parseInt(limit, 10) || 12, 1), 50);
+  const skip = (pageNum - 1) * limitNum;
+  const query = { usuario: id };
 
-  return { publicaciones };
+  if (tipo) query.tipo = normalizarTexto(tipo);
+  if (estado) query.estado = normalizarTexto(estado);
+
+  const regex = construirRegexBusqueda(search);
+  if (regex) {
+    query.$or = [{ raza: regex }, { detalles: regex }];
+  }
+
+  const [total, publicaciones] = await Promise.all([
+    publicacionesRepository.countDocuments(query),
+    publicacionesRepository.find({
+      filter: query,
+      populate: { path: "usuario", select: "nombre" },
+      sort: { fechaCreacion: -1 },
+      skip,
+      limit: limitNum,
+    }),
+  ]);
+
+  return { publicaciones, total, page: pageNum, totalPages: Math.ceil(total / limitNum) };
 };
 
 const getPublicacion = async ({ id }) => {
@@ -102,7 +155,7 @@ const getPublicacion = async ({ id }) => {
   });
 
   if (!publicacion) {
-    throw new AppError("Publicación no encontrada", 404);
+    throw new AppError("Publicacion no encontrada", 404);
   }
 
   return { publicacion };
@@ -118,13 +171,13 @@ const crearPublicacion = async ({ body, usuarioId, correo, ip }) => {
     especie: normalizarTexto(datos.especie),
     raza: normalizarTexto(datos.raza),
     sexo: normalizarTexto(datos.sexo),
-    tamaño: normalizarTexto(datos.tamaño),
+    [TAMANIO_KEY]: normalizarTexto(datos[TAMANIO_KEY]),
     color: normalizarTexto(datos.color),
     edad: datos.edad ? normalizarTexto(datos.edad) : undefined,
     detalles: datos.detalles ? normalizarTexto(datos.detalles) : undefined,
     castrado: datos.castrado,
     whatsapp: datos.whatsapp,
-    img: datos.img ? datos.img.toLowerCase() : undefined,
+    imgs: normalizarImagenes(datos),
     usuario: usuarioId,
     estado: ESTADO_DEFECTO[tipoNormalizado],
   };
@@ -145,7 +198,7 @@ const crearPublicacion = async ({ body, usuarioId, correo, ip }) => {
   const publicacionDB = await publicacionesRepository.save(publicacion);
   await publicacionesRepository.populateUsuario(publicacionDB, "nombre");
 
-  logger.info("Publicación creada", {
+  logger.info("Publicacion creada", {
     tipo: tipoNormalizado,
     especie: datosNormalizados.especie,
     usuario: correo,
@@ -160,22 +213,33 @@ const actualizarPublicacion = async ({ id, body, usuarioActual }) => {
   const publicacionExistente = await publicacionesRepository.findById(id);
 
   if (!publicacionExistente) {
-    throw new AppError("Publicación no encontrada", 404);
+    throw new AppError("Publicacion no encontrada", 404);
   }
 
   if (
     publicacionExistente.usuario.toString() !== usuarioActual._id.toString() &&
     usuarioActual.rol !== "ADMIN_ROLE"
   ) {
-    throw new AppError("No tiene permisos para editar esta publicación", 403);
+    throw new AppError("No tiene permisos para editar esta publicacion", 403);
+  }
+
+  const imagenesActuales = obtenerImagenesPublicacion(publicacionExistente);
+  const nuevasImagenes = normalizarImagenes(resto);
+
+  if (nuevasImagenes) {
+    const imagenesEliminadas = imagenesActuales.filter((img) => !nuevasImagenes.includes(img));
+    await Promise.all(imagenesEliminadas.map((img) => eliminarImagen(img)));
   }
 
   const datosNormalizados = {};
   Object.keys(resto).forEach((key) => {
     if (key === "whatsapp") {
       datosNormalizados[key] = resto[key];
-    } else if (key === "img" && resto[key]) {
-      datosNormalizados[key] = resto[key].toLowerCase();
+    } else if (key === "imgs" || key === "img") {
+      if (nuevasImagenes) {
+        datosNormalizados.imgs = nuevasImagenes;
+        datosNormalizados.img = undefined;
+      }
     } else if (typeof resto[key] === "string" && resto[key].trim() !== "") {
       datosNormalizados[key] = normalizarTexto(resto[key]);
     } else {
@@ -212,14 +276,14 @@ const cambiarEstadoPublicacion = async ({ id, estado, usuarioActual, correo, ip 
   const publicacion = await publicacionesRepository.findById(id);
 
   if (!publicacion) {
-    throw new AppError("Publicación no encontrada", 404);
+    throw new AppError("Publicacion no encontrada", 404);
   }
 
   if (
     publicacion.usuario.toString() !== usuarioActual._id.toString() &&
     usuarioActual.rol !== "ADMIN_ROLE"
   ) {
-    throw new AppError("No tiene permisos para cambiar el estado de esta publicación", 403);
+    throw new AppError("No tiene permisos para cambiar el estado de esta publicacion", 403);
   }
 
   const publicacionActualizada = await publicacionesRepository.findByIdAndUpdate(
@@ -229,7 +293,7 @@ const cambiarEstadoPublicacion = async ({ id, estado, usuarioActual, correo, ip 
     { path: "usuario", select: "nombre" },
   );
 
-  logger.info("Estado de publicación actualizado", {
+  logger.info("Estado de publicacion actualizado", {
     publicacionId: id,
     nuevoEstado: normalizarTexto(estado),
     usuario: correo,
@@ -243,19 +307,22 @@ const eliminarPublicacion = async ({ id, usuarioActual, correo, ip }) => {
   const publicacion = await publicacionesRepository.findById(id);
 
   if (!publicacion) {
-    throw new AppError("Publicación no encontrada", 404);
+    throw new AppError("Publicacion no encontrada", 404);
   }
 
   if (
     publicacion.usuario.toString() !== usuarioActual._id.toString() &&
     usuarioActual.rol !== "ADMIN_ROLE"
   ) {
-    throw new AppError("No tiene permisos para eliminar esta publicación", 403);
+    throw new AppError("No tiene permisos para eliminar esta publicacion", 403);
   }
+
+  const imagenes = obtenerImagenesPublicacion(publicacion);
+  await Promise.all(imagenes.map((img) => eliminarImagen(img)));
 
   const publicacionEliminada = await publicacionesRepository.findByIdAndDelete(id);
 
-  logger.warn("Publicación eliminada", {
+  logger.warn("Publicacion eliminada", {
     publicacionId: id,
     tipo: publicacion.tipo,
     eliminadaPor: correo,
@@ -275,32 +342,130 @@ const getContacto = async ({ id }) => {
   });
 
   if (!publicacion) {
-    throw new AppError("Publicación no encontrada", 404);
+    throw new AppError("Publicacion no encontrada", 404);
   }
 
   return { whatsapp: publicacion.whatsapp };
 };
 
-const getPublicacionesAdmin = async ({ estado, page = 1, limit = 12 }) => {
+const getPublicacionesAdmin = async ({
+  estado,
+  tipo,
+  search,
+  raza,
+  localidad,
+  page = 1,
+  limit = 12,
+  sortBy = "fechaCreacion",
+  sortOrder = "desc",
+}) => {
   const pageNum = Math.max(parseInt(page, 10) || 1, 1);
   const limitNum = Math.min(Math.max(parseInt(limit, 10) || 12, 1), 50);
   const skip = (pageNum - 1) * limitNum;
 
   const query = {};
   if (estado) query.estado = normalizarTexto(estado);
+  if (tipo) query.tipo = normalizarTexto(tipo);
+  if (raza) query.raza = normalizarTexto(raza);
+  if (localidad) query.localidad = normalizarTexto(localidad);
+
+  const regex = construirRegexBusqueda(search);
+  if (regex) {
+    query.$or = [{ raza: regex }, { detalles: regex }, { lugar: regex }];
+  }
+
+  const sortFields = new Set(["fechaCreacion", "tipo", "estado"]);
+  const sortKey = sortFields.has(sortBy) ? sortBy : "fechaCreacion";
+  const sortDirection = String(sortOrder).toLowerCase() === "asc" ? 1 : -1;
 
   const [total, publicaciones] = await Promise.all([
     publicacionesRepository.countDocuments(query),
     publicacionesRepository.find({
       filter: query,
       populate: { path: "usuario", select: "nombre correo" },
-      sort: { fechaCreacion: -1 },
+      sort: { [sortKey]: sortDirection },
       skip,
       limit: limitNum,
     }),
   ]);
 
   return { total, page: pageNum, totalPages: Math.ceil(total / limitNum), publicaciones };
+};
+
+const exportarPublicaciones = async ({ estado, tipo, search, raza, localidad }) => {
+  const query = {};
+  if (estado) query.estado = normalizarTexto(estado);
+  if (tipo) query.tipo = normalizarTexto(tipo);
+  if (raza) query.raza = normalizarTexto(raza);
+  if (localidad) query.localidad = normalizarTexto(localidad);
+
+  const regex = construirRegexBusqueda(search);
+  if (regex) {
+    query.$or = [{ raza: regex }, { detalles: regex }, { lugar: regex }];
+  }
+
+  const publicaciones = await publicacionesRepository.find({
+    filter: query,
+    populate: { path: "usuario", select: "nombre correo telefono fechaCreacion" },
+    sort: { fechaCreacion: -1 },
+  });
+
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Publicaciones");
+
+  worksheet.columns = [
+    { header: "Tipo", key: "tipo", width: 14 },
+    { header: "Estado", key: "estado", width: 22 },
+    { header: "Especie", key: "especie", width: 12 },
+    { header: "Raza", key: "raza", width: 20 },
+    { header: "Nombre del animal", key: "nombreanimal", width: 22 },
+    { header: "Sexo", key: "sexo", width: 12 },
+    { header: "Tamaño", key: "tamano", width: 14 },
+    { header: "Color", key: "color", width: 16 },
+    { header: "Edad", key: "edad", width: 14 },
+    { header: "Localidad", key: "localidad", width: 22 },
+    { header: "Lugar", key: "lugar", width: 30 },
+    { header: "Fecha del evento", key: "fechaEvento", width: 18 },
+    { header: "Detalles", key: "detalles", width: 40 },
+    { header: "Fecha de publicación", key: "fechaCreacion", width: 20 },
+    { header: "Nombre del usuario", key: "usuarioNombre", width: 25 },
+    { header: "Correo del usuario", key: "usuarioCorreo", width: 32 },
+    { header: "Teléfono del usuario", key: "usuarioTelefono", width: 18 },
+    { header: "Fecha de registro", key: "usuarioFechaRegistro", width: 20 },
+  ];
+
+  publicaciones.forEach((p) => {
+    const u = p.usuario || {};
+    worksheet.addRow({
+      tipo: p.tipo || "",
+      estado: p.estado || "",
+      especie: p.especie || "",
+      raza: p.raza || "",
+      nombreanimal: p.nombreanimal || "",
+      sexo: p.sexo || "",
+      tamano: p[TAMANIO_KEY] || "",
+      color: p.color || "",
+      edad: p.edad || "",
+      localidad: p.localidad || "",
+      lugar: p.lugar || "",
+      fechaEvento: p.fecha || "",
+      detalles: p.detalles || "",
+      fechaCreacion: p.fechaCreacion?.toLocaleDateString("es-AR") || "",
+      usuarioNombre: u.nombre || "",
+      usuarioCorreo: u.correo || "",
+      usuarioTelefono: u.telefono || "",
+      usuarioFechaRegistro: u.fechaCreacion?.toLocaleDateString("es-AR") || "",
+    });
+  });
+
+  worksheet.getRow(1).font = { bold: true };
+  worksheet.getRow(1).fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFD9EAD3" },
+  };
+
+  return workbook.xlsx.writeBuffer();
 };
 
 module.exports = {
@@ -313,4 +478,5 @@ module.exports = {
   eliminarPublicacion,
   getContacto,
   getPublicacionesAdmin,
+  exportarPublicaciones,
 };

@@ -35,6 +35,7 @@ describe("service/publicaciones — integración", () => {
         ip: "::1",
       });
       expect(result.publicacion.estado).toBe("SE BUSCA");
+      expect(result.publicacion.imgs).toHaveLength(1);
     });
 
     test("asigna estado defecto ENCONTRADO → BUSCANDO A SU FAMILIA", async () => {
@@ -274,6 +275,42 @@ describe("service/publicaciones — integración", () => {
         sexo: "macho",
       });
       expect(result.total).toBe(1);
+    });
+  });
+
+  describe("getPublicacionesUsuario", () => {
+    test("filtra por search y tipo con paginacion", async () => {
+      const user = await createUser();
+      await createPublicacion(user._id, {
+        tipo: "PERDIDO",
+        raza: "LABRADOR RETRIEVER",
+        detalles: "Llevaba collar rojo",
+      });
+      await createPublicacion(user._id, {
+        tipo: "ADOPCION",
+        raza: "MESTIZO",
+        detalles: "Muy cariñoso",
+        estado: "EN BUSCA DE UN HOGAR",
+        afinidad: "ALTA",
+        afinidadanimales: "ALTA",
+        energia: "MEDIA",
+        castrado: true,
+        localidad: undefined,
+        lugar: undefined,
+        fecha: undefined,
+      });
+
+      const result = await publicacionService.getPublicacionesUsuario({
+        id: user._id.toString(),
+        usuarioActual: user,
+        tipo: "PERDIDO",
+        search: "collar",
+        page: 1,
+        limit: 10,
+      });
+
+      expect(result.total).toBe(1);
+      expect(result.publicaciones[0].tipo).toBe("PERDIDO");
     });
   });
 

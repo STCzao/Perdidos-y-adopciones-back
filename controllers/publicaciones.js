@@ -14,6 +14,7 @@ const publicacionesUsuarioGet = async (req, res, next) => {
     const result = await publicacionService.getPublicacionesUsuario({
       id: req.params.id,
       usuarioActual: req.usuario,
+      ...req.query,
     });
     res.json({ success: true, ...result });
   } catch (error) {
@@ -104,6 +105,19 @@ const publicacionesAdminGet = async (req, res, next) => {
   }
 };
 
+const publicacionesExportar = async (req, res, next) => {
+  try {
+    const buffer = await publicacionService.exportarPublicaciones(req.query);
+    res.set({
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="publicaciones-${Date.now()}.xlsx"`,
+    });
+    res.send(buffer);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   publicacionesGet,
   publicacionesUsuarioGet,
@@ -114,4 +128,5 @@ module.exports = {
   publicacionesDelete,
   obtenerContactoPublicacion,
   publicacionesAdminGet,
+  publicacionesExportar,
 };

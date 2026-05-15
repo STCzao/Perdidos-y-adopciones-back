@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const { generarAccessToken, generarRefreshToken } = require("../helpers/generar-jwt");
 const { enviarEmail } = require("../helpers/enviar-mails");
+const { cloudinary } = require("../helpers/cloudinary");
 const logger = require("../helpers/logger");
 const AppError = require("../helpers/AppError");
 const authRepository = require("../repositories/authRepository");
@@ -60,13 +61,13 @@ const login = async ({ correo, password, userAgent, ip }) => {
 
 const forgotPassword = async ({ correo, ip }) => {
   const RESPUESTA_GENERICA = {
-    msg: "Si el correo está registrado, recibirás un enlace en los próximos minutos. Revisá también la carpeta de Spam.",
+    msg: "Si el correo esta registrado, recibiras un enlace en los proximos minutos. Revisa tambien la carpeta de Spam.",
   };
 
   const usuario = await authRepository.findByCorreo(correo);
 
   if (!usuario) {
-    logger.warn("Solicitud de recuperación para correo no registrado", { correo, ip });
+    logger.warn("Solicitud de recuperacion para correo no registrado", { correo, ip });
     return RESPUESTA_GENERICA;
   }
 
@@ -74,21 +75,20 @@ const forgotPassword = async ({ correo, ip }) => {
   const resetTokenHash = hashResetToken(token);
   const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${token}`;
 
-  // Enviar email ANTES de persistir el token — si falla, no queda token huérfano en DB
   await enviarEmail(
     usuario.correo,
-    "Recuperar contraseña",
+    "Recuperar contrasena",
     `<p>Hola ${usuario.nombre},</p>
-     <p>Haz click en el siguiente enlace para restablecer tu contraseña:</p>
+     <p>Haz click en el siguiente enlace para restablecer tu contrasena:</p>
      <a href="${resetUrl}" target="_blank">${resetUrl}</a>
-     <p>Este enlace expirará en 1 hora.</p>`
+     <p>Este enlace expirara en 1 hora.</p>`,
   );
 
   usuario.resetToken = resetTokenHash;
-  usuario.resetTokenExp = Date.now() + 3600000; // 1 hora
+  usuario.resetTokenExp = Date.now() + 3600000;
   await authRepository.save(usuario);
 
-  logger.info("Email de recuperación enviado", { correo, ip });
+  logger.info("Email de recuperacion enviado", { correo, ip });
 
   return RESPUESTA_GENERICA;
 };
@@ -97,12 +97,12 @@ const resetPassword = async ({ token, password, ip }) => {
   const usuario = await authRepository.findByResetTokenHash(hashResetToken(token));
 
   if (!usuario) {
-    logger.warn("Intento de reset con token inválido o expirado", {
+    logger.warn("Intento de reset con token invalido o expirado", {
       tokenHint: token.slice(0, 8) + "...",
       ip,
     });
-    throw new AppError("Token inválido o expirado", 400, {
-      password: "Token inválido o expirado",
+    throw new AppError("Token invalido o expirado", 400, {
+      password: "Token invalido o expirado",
     });
   }
 
@@ -113,13 +113,13 @@ const resetPassword = async ({ token, password, ip }) => {
   usuario.resetTokenExp = undefined;
   await authRepository.save(usuario);
 
-  logger.info("Contraseña restablecida exitosamente", {
+  logger.info("Contrasena restablecida exitosamente", {
     correo: usuario.correo,
     ip,
     tokensInvalidados: true,
   });
 
-  return { msg: "Contraseña actualizada correctamente" };
+  return { msg: "Contrasena actualizada correctamente" };
 };
 
 const renovarToken = async ({ refreshToken, userAgent, ip }) => {
@@ -134,11 +134,11 @@ const renovarToken = async ({ refreshToken, userAgent, ip }) => {
       process.env.REFRESH_SECRET,
       buildRefreshTokenVerifyOptions(),
     );
-    if (type !== "refresh") throw new Error("Token inválido");
+    if (type !== "refresh") throw new Error("Token invalido");
     uid = userId;
   } catch (error) {
-    logger.warn("Intento de refresh con token inválido", { ip, error: error.message });
-    throw new AppError("Refresh token inválido o expirado", 401);
+    logger.warn("Intento de refresh con token invalido", { ip, error: error.message });
+    throw new AppError("Refresh token invalido o expirado", 401);
   }
 
   const usuario = await authRepository.findById(uid);
@@ -162,18 +162,17 @@ const renovarToken = async ({ refreshToken, userAgent, ip }) => {
       correo: usuario.correo,
       ip,
       tokensActuales,
-      motivo: tokensActuales === 0 ? "Usuario cerró sesión previamente" : "Posible robo de token",
+      motivo: tokensActuales === 0 ? "Usuario cerro sesion previamente" : "Posible robo de token",
     });
     if (isProduction) {
-      // En producción, invalidamos todas las sesiones ante posible robo de token
       usuario.refreshTokens = [];
       await authRepository.save(usuario);
       throw new AppError(
-        "Refresh token inválido. Por seguridad, cierra sesión en todos tus dispositivos.",
-        401
+        "Refresh token invalido. Por seguridad, cierra sesion en todos tus dispositivos.",
+        401,
       );
     }
-    throw new AppError("Refresh token inválido o expirado", 401);
+    throw new AppError("Refresh token invalido o expirado", 401);
   }
 
   const [newAccessToken, newRefreshToken] = await Promise.all([
@@ -198,7 +197,7 @@ const logout = async ({ userId, refreshToken, correo, ip }) => {
   const usuario = await authRepository.findById(userId);
 
   if (!usuario) {
-    return { msg: "Sesión cerrada correctamente" };
+    return { msg: "Sesion cerrada correctamente" };
   }
 
   if (refreshToken) {
@@ -208,14 +207,14 @@ const logout = async ({ userId, refreshToken, correo, ip }) => {
 
   logger.info("Logout exitoso", { correo, ip });
 
-  return { msg: "Sesión cerrada correctamente" };
+  return { msg: "Sesion cerrada correctamente" };
 };
 
 const logoutAll = async ({ userId, correo, ip }) => {
   const usuario = await authRepository.findById(userId);
 
   if (!usuario) {
-    return { msg: "Sesión cerrada en todos los dispositivos" };
+    return { msg: "Sesion cerrada en todos los dispositivos" };
   }
 
   usuario.refreshTokens = [];
@@ -223,7 +222,33 @@ const logoutAll = async ({ userId, correo, ip }) => {
 
   logger.warn("Logout de todos los dispositivos", { correo, ip });
 
-  return { msg: "Sesión cerrada en todos los dispositivos" };
+  return { msg: "Sesion cerrada en todos los dispositivos" };
 };
 
-module.exports = { login, forgotPassword, resetPassword, renovarToken, logout, logoutAll };
+const generarCloudinarySignature = async () => {
+  const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET } = process.env;
+
+  if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET) {
+    throw new AppError("Cloudinary no esta configurado", 500);
+  }
+
+  const timestamp = Math.floor(Date.now() / 1000);
+  const signature = cloudinary.utils.api_sign_request({ timestamp }, CLOUDINARY_API_SECRET);
+
+  return {
+    signature,
+    timestamp,
+    apiKey: CLOUDINARY_API_KEY,
+    cloudName: CLOUDINARY_CLOUD_NAME,
+  };
+};
+
+module.exports = {
+  login,
+  forgotPassword,
+  resetPassword,
+  renovarToken,
+  logout,
+  logoutAll,
+  generarCloudinarySignature,
+};

@@ -72,6 +72,48 @@ describe("service/usuarios - integracion", () => {
     });
   });
 
+  describe("getUsuariosAdmin", () => {
+    test("ordena por fechaCreacion descendente y permite filtrar", async () => {
+      await createUser({
+        nombre: "Ana",
+        correo: "ana@test.com",
+        fechaCreacion: new Date("2026-01-01"),
+      });
+      await createUser({
+        nombre: "Beto",
+        correo: "beto@test.com",
+        rol: "MODERADOR_ROLE",
+        fechaCreacion: new Date("2026-02-01"),
+      });
+
+      const result = await usuarioService.getUsuariosAdmin({
+        sortBy: "fechaCreacion",
+        sortOrder: "desc",
+        rol: "MODERADOR_ROLE",
+      });
+
+      expect(result.total).toBe(1);
+      expect(result.usuarios[0].rol).toBe("MODERADOR_ROLE");
+    });
+  });
+
+  describe("cambiarRolUsuario", () => {
+    test("permite que un admin promueva a moderador", async () => {
+      const admin = await createAdmin();
+      const user = await createUser();
+
+      await usuarioService.cambiarRolUsuario({
+        id: user._id.toString(),
+        rol: "MODERADOR_ROLE",
+        usuarioActual: admin,
+        ip: "::1",
+      });
+
+      const updated = await Usuario.findById(user._id);
+      expect(updated.rol).toBe("MODERADOR_ROLE");
+    });
+  });
+
   describe("actualizarMiPerfil", () => {
     test("actualiza el nombre y la imagen del usuario en DB", async () => {
       const user = await createUser();

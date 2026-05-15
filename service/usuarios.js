@@ -7,6 +7,7 @@ const normalizarNombre = (nombre) => nombre.trim().replace(/\s+/g, " ");
 const normalizarCorreo = (correo) => correo.trim().toLowerCase();
 const normalizarTelefono = (telefono) => telefono.trim();
 const normalizarImg = (img) => img.trim().toLowerCase();
+const escaparRegex = (texto) => texto.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const enmascararIp = (ip = "") => {
   if (!ip) return "No disponible";
@@ -58,6 +59,49 @@ const getUsuarios = async ({ page = 1, limit = 20 } = {}) => {
   return { total, page: pageNum, totalPages: Math.ceil(total / limitNum), usuarios };
 };
 
+const getUsuariosAdmin = async ({
+  page = 1,
+  limit = 20,
+  sortBy = "fechaCreacion",
+  sortOrder = "desc",
+  search,
+  rol,
+  estado,
+} = {}) => {
+  const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+  const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+  const skip = (pageNum - 1) * limitNum;
+  const filter = {};
+
+  if (rol) filter.rol = rol;
+  if (estado !== undefined) {
+    filter.estado = typeof estado === "string" ? estado.toLowerCase() === "true" : Boolean(estado);
+  }
+
+  const searchTerm = typeof search === "string" ? search.trim().slice(0, 100) : "";
+  if (searchTerm) {
+    const regex = { $regex: escaparRegex(searchTerm), $options: "i" };
+    filter.$or = [{ nombre: regex }, { correo: regex }];
+  }
+
+  const sortFields = new Set(["nombre", "correo", "fechaCreacion", "rol"]);
+  const sortKey = sortFields.has(sortBy) ? sortBy : "fechaCreacion";
+  const sortDirection = String(sortOrder).toLowerCase() === "asc" ? 1 : -1;
+
+  const [total, usuarios] = await Promise.all([
+    usuariosRepository.countDocuments(filter),
+    usuariosRepository.find({
+      filter,
+      select: "-password",
+      sort: { [sortKey]: sortDirection },
+      skip,
+      limit: limitNum,
+    }),
+  ]);
+
+  return { total, page: pageNum, totalPages: Math.ceil(total / limitNum), usuarios };
+};
+
 const crearUsuario = async ({ nombre, correo, password, telefono, ip }) => {
   const usuario = usuariosRepository.create({
     nombre: normalizarNombre(nombre),
@@ -85,7 +129,7 @@ const actualizarUsuario = async ({ id, datos, usuarioActual }) => {
     throw new AppError("No tiene permisos para modificar este usuario", 403);
   }
 
-  const { _id, password, google, correo, nombre, telefono, img, ...resto } = datos;
+  const { _id, password, google, correo, nombre, telefono, img, rol, estado, ...resto } = datos;
 
   if (password !== undefined) {
     throw new AppError("La contraseña no se puede modificar desde este endpoint", 400, {
@@ -93,9 +137,10 @@ const actualizarUsuario = async ({ id, datos, usuarioActual }) => {
     });
   }
 
-  if (usuarioActual.rol !== "ADMIN_ROLE") {
-    delete resto.rol;
-    delete resto.estado;
+  if (rol !== undefined || estado !== undefined) {
+    throw new AppError("Rol y estado se modifican desde endpoints específicos", 400, {
+      general: "Use los endpoints dedicados para cambiar rol o estado",
+    });
   }
 
   if (nombre) resto.nombre = normalizarNombre(nombre);
@@ -138,6 +183,42 @@ const cambiarEstado = async ({ id, estado, usuarioActual, ip }) => {
     modificadoPor: usuarioActual.correo,
     ip,
     tokensInvalidados: estado === false,
+  });
+
+  return { usuario };
+};
+
+const cambiarRolUsuario = async ({ id, rol, usuarioActual, ip }) => {
+  if (usuarioActual.rol !== "ADMIN_ROLE") {
+    throw new AppError("No tiene permisos para cambiar roles", 403);
+  }
+
+  if (usuarioActual._id.toString() === id) {
+    throw new AppError("No puede cambiar su propio rol", 403);
+  }
+
+  if (rol === "ADMIN_ROLE") {
+    throw new AppError("No se permite asignar ADMIN_ROLE desde esta API", 400);
+  }
+
+  const usuario = await usuariosRepository.findById(id);
+
+  if (!usuario) {
+    throw new AppError("Usuario no encontrado", 404);
+  }
+
+  if (usuario.rol === "ADMIN_ROLE") {
+    throw new AppError("No se puede cambiar el rol de un administrador", 403);
+  }
+
+  usuario.rol = rol;
+  await usuariosRepository.save(usuario);
+
+  logger.info("Rol de usuario modificado", {
+    usuarioId: id,
+    nuevoRol: rol,
+    modificadoPor: usuarioActual.correo,
+    ip,
   });
 
   return { usuario };
@@ -388,9 +469,11 @@ const cambiarPasswordMiPerfil = async ({ userId, correo, currentPassword, newPas
 
 module.exports = {
   getUsuarios,
+  getUsuariosAdmin,
   crearUsuario,
   actualizarUsuario,
   cambiarEstado,
+  cambiarRolUsuario,
   eliminarUsuario,
   getUsuario,
   getDashboard,

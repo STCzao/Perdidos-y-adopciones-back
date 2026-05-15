@@ -6,6 +6,7 @@ const {
   refreshToken,
   logout,
   logoutAll,
+  cloudinarySignature,
 } = require("../controllers/auth");
 const {
   loginValidator,
@@ -25,6 +26,7 @@ router.post("/reset-password/:token", resetPasswordValidator, resetPassword);
 
 router.post("/refresh", refreshTokenValidator, refreshToken);
 
+router.get("/cloudinary-signature", validarJWT, cloudinarySignature);
 router.post("/logout", validarJWT, logout);
 router.post("/logout-all", validarJWT, logoutAll);
 

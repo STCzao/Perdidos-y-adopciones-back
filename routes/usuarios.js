@@ -1,9 +1,11 @@
 const { Router } = require("express");
 const {
   usuariosGet,
+  usuariosAdminGet,
   usuariosPost,
   usuariosPut,
   cambiarUsuarioEstado,
+  usuariosRolPatch,
   usuariosDelete,
   usuarioGet,
   usuariosDashboard,
@@ -18,6 +20,7 @@ const {
   usuarioIdValidator,
   updateUsuarioValidator,
   cambiarEstadoValidator,
+  cambiarRolValidator,
 } = require("../validators/usuariosValidator");
 const { validarJWT } = require("../middlewares/validar-jwt");
 const { esAdminRole } = require("../middlewares/validar-roles");
@@ -38,6 +41,8 @@ router.patch(
 
 router.get("/", [validarJWT, esAdminRole], usuariosGet);
 
+router.get("/admin", [validarJWT, esAdminRole], usuariosAdminGet);
+
 router.get("/dashboard/:id", [validarJWT, ...usuarioIdValidator], usuariosDashboard);
 
 router.get("/:id", [validarJWT, ...usuarioIdValidator], usuarioGet);
@@ -49,6 +54,8 @@ router.put(
   [validarJWT, esAdminRole, ...cambiarEstadoValidator],
   cambiarUsuarioEstado,
 );
+
+router.patch("/:id/rol", [validarJWT, esAdminRole, ...cambiarRolValidator], usuariosRolPatch);
 
 router.delete("/:id", [validarJWT, ...usuarioIdValidator], usuariosDelete);
 

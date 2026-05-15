@@ -47,9 +47,13 @@ const UsuarioSchema = Schema({
     type: String,
     required: true,
     default: "USER_ROLE",
-    enum: ["ADMIN_ROLE", "USER_ROLE"],
+    enum: ["ADMIN_ROLE", "USER_ROLE", "MODERADOR_ROLE"],
   },
   estado: { type: Boolean, default: true },
+  fechaCreacion: {
+    type: Date,
+    default: Date.now,
+  },
   resetToken: { type: String },
   resetTokenExp: { type: Date },
   refreshTokens: [
@@ -68,6 +72,8 @@ const UsuarioSchema = Schema({
     },
   ],
 });
+
+UsuarioSchema.index({ fechaCreacion: -1 });
 
 UsuarioSchema.methods.toJSON = function () {
   const { __v, password, resetToken, resetTokenExp, refreshTokens, _id, ...usuario } =
