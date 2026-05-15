@@ -9,6 +9,15 @@ const usuariosGet = async (req, res, next) => {
   }
 };
 
+const usuariosAdminGet = async (req, res, next) => {
+  try {
+    const result = await usuarioService.getUsuariosAdmin(req.query);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const usuariosPost = async (req, res, next) => {
   try {
     const result = await usuarioService.crearUsuario({
@@ -42,6 +51,20 @@ const cambiarUsuarioEstado = async (req, res, next) => {
     const result = await usuarioService.cambiarEstado({
       id: req.params.id,
       estado: req.body.estado,
+      usuarioActual: req.usuario,
+      ip: req.ip,
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const usuariosRolPatch = async (req, res, next) => {
+  try {
+    const result = await usuarioService.cambiarRolUsuario({
+      id: req.params.id,
+      rol: req.body.rol,
       usuarioActual: req.usuario,
       ip: req.ip,
     });
@@ -127,9 +150,11 @@ const miPerfilPasswordPatch = async (req, res, next) => {
 
 module.exports = {
   usuariosGet,
+  usuariosAdminGet,
   usuariosPost,
   usuariosPut,
   cambiarUsuarioEstado,
+  usuariosRolPatch,
   usuariosDelete,
   usuarioGet,
   usuariosDashboard,

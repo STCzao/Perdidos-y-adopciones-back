@@ -1,4 +1,4 @@
-const { esAdminRole, tieneRole } = require("../../../middlewares/validar-roles");
+const { esAdminRole, esModeradorOAdmin, tieneRole } = require("../../../middlewares/validar-roles");
 
 const buildRes = () => {
   const res = {};
@@ -53,5 +53,21 @@ describe("tieneRole", () => {
     const res = buildRes();
     tieneRole("ADMIN_ROLE")(req, res, jest.fn());
     expect(res.status).toHaveBeenCalledWith(500);
+  });
+});
+
+describe("esModeradorOAdmin", () => {
+  test("permite acceso cuando el usuario es moderador", () => {
+    const req = { usuario: { rol: "MODERADOR_ROLE", nombre: "Mod" } };
+    const next = jest.fn();
+    esModeradorOAdmin(req, buildRes(), next);
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  test("deniega cuando el usuario no es admin ni moderador", () => {
+    const req = { usuario: { rol: "USER_ROLE", nombre: "Juan" } };
+    const res = buildRes();
+    esModeradorOAdmin(req, res, jest.fn());
+    expect(res.status).toHaveBeenCalledWith(403);
   });
 });

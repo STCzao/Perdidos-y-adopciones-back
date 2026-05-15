@@ -17,12 +17,30 @@ const ESTADOS = [
   "INACTIVO",
   "BUSCANDO A SU FAMILIA",
   "APARECIO SU FAMILIA",
+  "TIENE NUEVA FAMILIA",
   "SE BUSCA",
 ];
 
 const cloudinaryUrl = /^https:\/\/res\.cloudinary\.com\/.+$/;
 const soloNumeros = /^[0-9]{10,15}$/;
 const esStringNoVacio = (value) => typeof value === "string" && value.trim().length > 0;
+const validarImgs = (requerido = false) =>
+  check("imgs")
+    .if((_value, { req }) => requerido || req.body.imgs !== undefined)
+    .custom((value) => {
+      if (!Array.isArray(value)) {
+        throw new Error("Las imágenes deben enviarse en un arreglo");
+      }
+      if (value.length < 1 || value.length > 5) {
+        throw new Error("Debe incluir entre 1 y 5 imágenes");
+      }
+      value.forEach((img) => {
+        if (!esStringNoVacio(img) || !cloudinaryUrl.test(img.trim())) {
+          throw new Error("Todas las imágenes deben ser URLs válidas de Cloudinary");
+        }
+      });
+      return true;
+    });
 
 const stringRequerido = (field, etiqueta, { min, max } = {}) => {
   const reglas = [
@@ -175,8 +193,7 @@ const createPublicacionValidator = [
   check("whatsapp", "El formato de WhatsApp no es válido (solo números, sin +)").matches(
     soloNumeros,
   ),
-  ...stringRequerido("img", "La imagen"),
-  check("img", "La URL de imagen no es válida").matches(cloudinaryUrl),
+  validarImgs(true),
   validarCampos,
 ];
 
@@ -232,8 +249,7 @@ const updatePublicacionValidator = [
     .optional()
     .matches(soloNumeros)
     .withMessage("El formato de WhatsApp no es válido (solo números, sin +)"),
-  ...stringOpcional("img", "La imagen"),
-  check("img").optional().matches(cloudinaryUrl).withMessage("La URL de imagen no es válida"),
+  validarImgs(false),
   validarCampos,
 ];
 

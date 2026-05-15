@@ -156,6 +156,13 @@ const cambiarEstadoValidator = [
   validarCampos,
 ];
 
+const cambiarRolValidator = [
+  check("id", "No es un ID válido").isMongoId(),
+  check("rol", "El rol es obligatorio").custom(esStringNoVacio),
+  check("rol", "Rol no válido").isIn(["USER_ROLE", "MODERADOR_ROLE"]),
+  validarCampos,
+];
+
 module.exports = {
   createUsuarioValidator,
   updateMiPerfilValidator,
@@ -163,4 +170,5 @@ module.exports = {
   usuarioIdValidator,
   updateUsuarioValidator,
   cambiarEstadoValidator,
+  cambiarRolValidator,
 };

@@ -27,7 +27,7 @@ const PUBLICACION_VALIDA = {
   lugar: "PARQUE 9 DE JULIO",
   fecha: "2026-03-19",
   whatsapp: "3812345678901",
-  img: "https://res.cloudinary.com/demo/image/upload/test.jpg",
+  imgs: ["https://res.cloudinary.com/demo/image/upload/test.jpg"],
 };
 
 describe("E2E: /api/publicaciones", () => {

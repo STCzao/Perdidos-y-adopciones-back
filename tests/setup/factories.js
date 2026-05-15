@@ -48,15 +48,24 @@ const PUBLICACION_BASE = {
   lugar: "PARQUE 9 DE JULIO",
   fecha: "2026-03-19",
   whatsapp: "3812345678901",
+  imgs: ["https://res.cloudinary.com/demo/image/upload/test.jpg"],
   img: "https://res.cloudinary.com/demo/image/upload/test.jpg",
   estado: "SE BUSCA",
 };
 
 const createPublicacion = async (usuarioId, overrides = {}) => {
-  const pub = new Publicacion({
+  const data = {
     ...PUBLICACION_BASE,
     usuario: usuarioId,
     ...overrides,
+  };
+
+  if (overrides.img && overrides.imgs === undefined) {
+    data.imgs = [overrides.img];
+  }
+
+  const pub = new Publicacion({
+    ...data,
   });
   return pub.save();
 };

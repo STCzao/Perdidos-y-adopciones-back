@@ -20,6 +20,26 @@ const esAdminRole = (req, res = response, next) => {
   next();
 };
 
+const esModeradorOAdmin = (req, res = response, next) => {
+  if (!req.usuario) {
+    return res.status(500).json({
+      success: false,
+      msg: "Se quiere verificar el role sin validar el token primero",
+    });
+  }
+
+  const { rol } = req.usuario;
+
+  if (rol !== "ADMIN_ROLE" && rol !== "MODERADOR_ROLE") {
+    return res.status(403).json({
+      success: false,
+      msg: "No tiene permisos",
+    });
+  }
+
+  next();
+};
+
 const tieneRole = (...roles) => {
   return (req, res = response, next) => {
     if (!req.usuario) {
@@ -42,5 +62,6 @@ const tieneRole = (...roles) => {
 
 module.exports = {
   esAdminRole,
+  esModeradorOAdmin,
   tieneRole,
 };

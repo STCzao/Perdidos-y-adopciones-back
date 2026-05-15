@@ -94,6 +94,15 @@ const logoutAll = async (req, res, next) => {
   }
 };
 
+const cloudinarySignature = async (req, res, next) => {
+  try {
+    const result = await authService.generarCloudinarySignature();
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   login,
   forgotPassword,
@@ -101,4 +110,5 @@ module.exports = {
   refreshToken,
   logout,
   logoutAll,
+  cloudinarySignature,
 };

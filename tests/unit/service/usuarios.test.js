@@ -67,6 +67,35 @@ describe("service/usuarios", () => {
     });
   });
 
+  describe("getUsuariosAdmin", () => {
+    test("aplica ordenamiento y filtros de admin", async () => {
+      const mockUsers = [makeMockUser()];
+      Usuario.countDocuments.mockResolvedValue(1);
+      const chainMock = {
+        select: jest.fn().mockReturnThis(),
+        sort: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue(mockUsers),
+      };
+      Usuario.find.mockReturnValue(chainMock);
+
+      const result = await usuarioService.getUsuariosAdmin({
+        sortBy: "fechaCreacion",
+        sortOrder: "desc",
+        search: "test",
+        rol: "USER_ROLE",
+        estado: "true",
+      });
+
+      expect(result.total).toBe(1);
+      expect(chainMock.sort).toHaveBeenCalledWith({ fechaCreacion: -1 });
+      expect(Usuario.countDocuments.mock.calls[0][0]).toMatchObject({
+        rol: "USER_ROLE",
+        estado: true,
+      });
+    });
+  });
+
   describe("crearUsuario", () => {
     test("fuerza rol USER_ROLE independientemente del input", async () => {
       let savedData;
@@ -180,6 +209,37 @@ describe("service/usuarios", () => {
       expect(mockUser.estado).toBe(false);
       expect(mockUser.refreshTokens).toHaveLength(0);
       expect(mockUser.save).toHaveBeenCalled();
+    });
+  });
+
+  describe("cambiarRolUsuario", () => {
+    test("no permite cambiar el propio rol del admin", async () => {
+      const admin = makeMockUser({ _id: "admin-id", rol: "ADMIN_ROLE" });
+      const err = await usuarioService
+        .cambiarRolUsuario({
+          id: "admin-id",
+          rol: "MODERADOR_ROLE",
+          usuarioActual: admin,
+          ip: "::1",
+        })
+        .catch((e) => e);
+
+      expect(err.statusCode).toBe(403);
+    });
+
+    test("actualiza el rol de un usuario comun", async () => {
+      const target = makeMockUser({ rol: "USER_ROLE" });
+      Usuario.findById.mockResolvedValue(target);
+
+      const result = await usuarioService.cambiarRolUsuario({
+        id: "uid-456",
+        rol: "MODERADOR_ROLE",
+        usuarioActual: makeMockUser({ rol: "ADMIN_ROLE", correo: "admin@test.com" }),
+        ip: "::1",
+      });
+
+      expect(result.usuario.rol).toBe("MODERADOR_ROLE");
+      expect(target.save).toHaveBeenCalled();
     });
   });
 

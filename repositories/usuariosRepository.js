@@ -6,10 +6,11 @@ const save = (usuario) => usuario.save();
 
 const countDocuments = (filter = {}) => Usuario.countDocuments(filter);
 
-const find = ({ filter = {}, select, skip, limit } = {}) => {
+const find = ({ filter = {}, select, sort, skip, limit } = {}) => {
   let query = Usuario.find(filter);
 
   if (select) query = query.select(select);
+  if (sort) query = query.sort(sort);
   if (Number.isInteger(skip)) query = query.skip(skip);
   if (Number.isInteger(limit)) query = query.limit(limit);
 

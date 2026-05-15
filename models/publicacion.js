@@ -27,6 +27,7 @@ const PublicacionSchema = Schema({
     enum: [
       "BUSCANDO A SU FAMILIA",
       "APARECIO SU FAMILIA",
+      "TIENE NUEVA FAMILIA",
       "SE BUSCA",
       "YA APARECIO",
       "EN BUSCA DE UN HOGAR",
@@ -126,9 +127,27 @@ const PublicacionSchema = Schema({
     ref: "Usuario",
     required: true,
   },
+  imgs: {
+    type: [
+      {
+        type: String,
+        match: [
+          /^https:\/\/res\.cloudinary\.com\/.+$/,
+          "La URL de imagen no es válida",
+        ],
+      },
+    ],
+    validate: {
+      validator: function (value) {
+        // Documentos legacy que solo tienen `img` son válidos sin `imgs`
+        if (!value || value.length === 0) return Boolean(this.img);
+        return value.length >= 1 && value.length <= 5;
+      },
+      message: "Debe incluir entre 1 y 5 imágenes",
+    },
+  },
   img: {
     type: String,
-    required: [true, "La imagen es obligatoria"],
     match: [
       /^https:\/\/res\.cloudinary\.com\/.+$/,
       "La URL de imagen no es válida",

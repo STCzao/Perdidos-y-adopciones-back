@@ -11,6 +11,7 @@ const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/usuarios");
 const publicationRoutes = require("./routes/publicaciones");
 const communityRoutes = require("./routes/comunidad");
+const colaboradoresRoutes = require("./routes/colaboradores");
 const { notFound, errorHandler } = require("./middlewares/error-handler");
 
 const sanitize = (obj, req) => {
@@ -77,6 +78,14 @@ const getAllowedOrigins = (testMode) => {
 
 const createApp = ({ testMode = false } = {}) => {
   const app = express();
+  const colaboradoresPostLimiter = createLimiter({
+    windowMs: 60 * 60 * 1000,
+    message: { success: false, msg: "Demasiadas solicitudes. Intenta mas tarde." },
+    standardHeaders: true,
+    legacyHeaders: false,
+    production: { max: 5 },
+    development: { max: 50 },
+  });
 
   app.set("trust proxy", 1);
   app.use(compression());
@@ -100,7 +109,7 @@ const createApp = ({ testMode = false } = {}) => {
     cors({
       origin: getAllowedOrigins(testMode),
       credentials: true,
-      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       allowedHeaders: ["Content-Type", "x-token", "Authorization", "X-Request-Id"],
       exposedHeaders: ["X-Request-Id"],
     }),
@@ -252,10 +261,20 @@ const createApp = ({ testMode = false } = {}) => {
     app.use(express.static("public"));
   }
 
+  app.use("/api/colaboradores", (req, res, next) => {
+    if (req.method !== "POST") {
+      next();
+      return;
+    }
+
+    colaboradoresPostLimiter(req, res, next);
+  });
+
   app.use("/api/auth", authRoutes);
   app.use("/api/usuarios", userRoutes);
   app.use("/api/publicaciones", publicationRoutes);
   app.use("/api/comunidad", communityRoutes);
+  app.use("/api/colaboradores", colaboradoresRoutes);
 
   app.use(notFound);
   app.use(errorHandler);

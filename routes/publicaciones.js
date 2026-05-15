@@ -10,6 +10,7 @@ const {
   publicacionesDelete,
   obtenerContactoPublicacion,
   publicacionesAdminGet,
+  publicacionesExportar,
 } = require("../controllers/publicaciones");
 const { validarJWT } = require("../middlewares/validar-jwt");
 const { esAdminRole } = require("../middlewares/validar-roles");
@@ -27,6 +28,8 @@ router.get("/", publicacionesGet);
 router.get("/razas", (req, res) =>
   res.json({ success: true, razas: RAZAS, razasPorEspecie: RAZAS_POR_ESPECIE }),
 );
+
+router.get("/admin/exportar", [validarJWT, esAdminRole], publicacionesExportar);
 
 router.get("/admin/todas", [validarJWT, esAdminRole], publicacionesAdminGet);
 
