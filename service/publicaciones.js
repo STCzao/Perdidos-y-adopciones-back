@@ -81,7 +81,7 @@ const getPublicaciones = async ({
 
   const regex = construirRegexBusqueda(search);
   if (regex) {
-    query.$or = [{ raza: regex }, { detalles: regex }];
+    query.$or = [{ nombreanimal: regex }, { color: regex }, { raza: regex }, { detalles: regex }];
     if (!tipo || normalizarTexto(tipo) !== "ADOPCION") {
       query.$or.push({ localidad: regex });
       query.$or.push({ lugar: regex });
@@ -127,7 +127,7 @@ const getPublicacionesUsuario = async ({
 
   const regex = construirRegexBusqueda(search);
   if (regex) {
-    query.$or = [{ raza: regex }, { detalles: regex }];
+    query.$or = [{ nombreanimal: regex }, { color: regex }, { raza: regex }, { detalles: regex }];
   }
 
   const [total, publicaciones] = await Promise.all([
@@ -371,7 +371,13 @@ const getPublicacionesAdmin = async ({
 
   const regex = construirRegexBusqueda(search);
   if (regex) {
-    query.$or = [{ raza: regex }, { detalles: regex }, { lugar: regex }];
+    query.$or = [
+      { nombreanimal: regex },
+      { color: regex },
+      { raza: regex },
+      { detalles: regex },
+      { lugar: regex },
+    ];
   }
 
   const sortFields = new Set(["fechaCreacion", "tipo", "estado"]);
@@ -401,7 +407,13 @@ const exportarPublicaciones = async ({ estado, tipo, search, raza, localidad }) 
 
   const regex = construirRegexBusqueda(search);
   if (regex) {
-    query.$or = [{ raza: regex }, { detalles: regex }, { lugar: regex }];
+    query.$or = [
+      { nombreanimal: regex },
+      { color: regex },
+      { raza: regex },
+      { detalles: regex },
+      { lugar: regex },
+    ];
   }
 
   const publicaciones = await publicacionesRepository.find({
