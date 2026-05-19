@@ -2,6 +2,7 @@
 jest.mock("../../helpers/enviar-mails", () => ({ enviarEmail: jest.fn().mockResolvedValue(undefined) }));
 jest.mock("../../helpers/logger", () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }));
 
+const crypto = require("crypto");
 const db = require("../setup/db");
 const { createUser } = require("../setup/factories");
 const bcryptjs = require("bcryptjs");
@@ -33,11 +34,19 @@ describe("service/auth — integración", () => {
 
     test("persiste el refreshToken en MongoDB", async () => {
       const user = await createUser();
-      await authService.login({ correo: user.correo, password: "password123", ip: "::1", userAgent: "TestAgent" });
+      const result = await authService.login({
+        correo: user.correo,
+        password: "password123",
+        ip: "::1",
+        userAgent: "TestAgent",
+      });
 
       const updated = await Usuario.findById(user._id);
       expect(updated.refreshTokens).toHaveLength(1);
       expect(updated.refreshTokens[0].device).toBe("TestAgent");
+      expect(updated.refreshTokens[0].token).toBe(
+        crypto.createHash("sha256").update(result.refreshToken).digest("hex"),
+      );
     });
 
     test("falla con credenciales incorrectas", async () => {
@@ -110,23 +119,35 @@ describe("service/auth — integración", () => {
   describe("logout", () => {
     test("elimina solo el refreshToken enviado", async () => {
       const user = await createUser();
+      const refreshTokenToRemove = "rt-to-remove";
+      const refreshTokenToKeep = "rt-to-keep";
       await Usuario.findByIdAndUpdate(user._id, {
         refreshTokens: [
-          { token: "rt-to-remove", device: "D", ip: "::1" },
-          { token: "rt-to-keep", device: "D", ip: "::1" },
+          {
+            token: crypto.createHash("sha256").update(refreshTokenToRemove).digest("hex"),
+            device: "D",
+            ip: "::1",
+          },
+          {
+            token: crypto.createHash("sha256").update(refreshTokenToKeep).digest("hex"),
+            device: "D",
+            ip: "::1",
+          },
         ],
       });
 
       await authService.logout({
         userId: user._id,
-        refreshToken: "rt-to-remove",
+        refreshToken: refreshTokenToRemove,
         correo: user.correo,
         ip: "::1",
       });
 
       const updated = await Usuario.findById(user._id);
       expect(updated.refreshTokens).toHaveLength(1);
-      expect(updated.refreshTokens[0].token).toBe("rt-to-keep");
+      expect(updated.refreshTokens[0].token).toBe(
+        crypto.createHash("sha256").update(refreshTokenToKeep).digest("hex"),
+      );
     });
   });
 

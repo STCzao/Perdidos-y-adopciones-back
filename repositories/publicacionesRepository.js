@@ -34,8 +34,8 @@ const save = (publicacion) => publicacion.save();
 
 const populateUsuario = (publicacion, select = "nombre") => publicacion.populate("usuario", select);
 
-const findByIdAndUpdate = (id, data, options = {}, populate) => {
-  let query = Publicacion.findByIdAndUpdate(id, data, options);
+const findByIdAndUpdate = (id, data, { populate, ...queryOptions } = {}) => {
+  let query = Publicacion.findByIdAndUpdate(id, data, queryOptions);
   if (populate) query = query.populate(populate.path, populate.select);
   return query;
 };

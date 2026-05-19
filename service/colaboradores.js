@@ -118,9 +118,12 @@ const exportarColaboradores = async ({ localidad, forma }) => {
   if (localidad) query.localidad = localidad;
   if (forma) query.formasColaboracion = forma;
 
+  const MAX_EXPORT = parseInt(process.env.EXPORT_MAX_ROWS ?? "5000", 10);
+
   const colaboradores = await colaboradoresRepository.find({
     filter: query,
     sort: { fechaRegistro: -1 },
+    limit: MAX_EXPORT,
   });
 
   const workbook = new ExcelJS.Workbook();

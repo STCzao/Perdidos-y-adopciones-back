@@ -2,7 +2,11 @@ const Usuario = require("../models/usuario");
 
 const findByCorreo = (correo) => Usuario.findOne({ correo });
 
-const findById = (id) => Usuario.findById(id);
+const findById = (id, { select } = {}) => {
+  let query = Usuario.findById(id);
+  if (select) query = query.select(select);
+  return query;
+};
 
 const findByResetTokenHash = (resetTokenHash) =>
   Usuario.findOne({

@@ -1,7 +1,19 @@
 const Comunidad = require("../models/comunidad");
 
-const findAll = () =>
-  Comunidad.find().populate("usuario", "nombre img rol").sort({ fechaCreacion: -1 });
+const find = ({ filter = {}, select, sort = { fechaCreacion: -1 }, skip, limit } = {}) => {
+  let query = Comunidad.find(filter).populate("usuario", "nombre img rol");
+
+  if (select) query = query.select(select);
+  if (sort) query = query.sort(sort);
+  if (Number.isInteger(skip)) query = query.skip(skip);
+  if (Number.isInteger(limit)) query = query.limit(limit);
+
+  return query;
+};
+
+const countDocuments = (filter = {}) => Comunidad.countDocuments(filter);
+
+const findAll = () => find();
 
 const findById = (id) => Comunidad.findById(id).populate("usuario", "nombre img rol");
 
@@ -18,6 +30,8 @@ const findByIdAndDelete = (id) => Comunidad.findByIdAndDelete(id);
 
 module.exports = {
   findAll,
+  find,
+  countDocuments,
   findById,
   create,
   save,

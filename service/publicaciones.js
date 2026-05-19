@@ -26,10 +26,10 @@ const ESTADO_DEFECTO = {
 
 const normalizarImagenes = ({ imgs, img } = {}) => {
   if (Array.isArray(imgs)) {
-    return imgs.map((imagen) => imagen.trim().toLowerCase());
+    return imgs.map((imagen) => imagen.trim());
   }
   if (typeof img === "string" && img.trim()) {
-    return [img.trim().toLowerCase()];
+    return [img.trim()];
   }
   return undefined;
 };
@@ -265,8 +265,7 @@ const actualizarPublicacion = async ({ id, body, usuarioActual }) => {
   const publicacionActualizada = await publicacionesRepository.findByIdAndUpdate(
     id,
     datosNormalizados,
-    { new: true, runValidators: true },
-    { path: "usuario", select: "nombre" },
+    { new: true, runValidators: true, populate: { path: "usuario", select: "nombre" } },
   );
 
   return { publicacion: publicacionActualizada };
@@ -289,8 +288,7 @@ const cambiarEstadoPublicacion = async ({ id, estado, usuarioActual, correo, ip 
   const publicacionActualizada = await publicacionesRepository.findByIdAndUpdate(
     id,
     { estado: normalizarTexto(estado) },
-    { new: true },
-    { path: "usuario", select: "nombre" },
+    { new: true, populate: { path: "usuario", select: "nombre" } },
   );
 
   logger.info("Estado de publicacion actualizado", {
@@ -416,10 +414,13 @@ const exportarPublicaciones = async ({ estado, tipo, search, raza, localidad }) 
     ];
   }
 
+  const MAX_EXPORT = parseInt(process.env.EXPORT_MAX_ROWS ?? "5000", 10);
+
   const publicaciones = await publicacionesRepository.find({
     filter: query,
     populate: { path: "usuario", select: "nombre correo telefono fechaCreacion" },
     sort: { fechaCreacion: -1 },
+    limit: MAX_EXPORT,
   });
 
   const workbook = new ExcelJS.Workbook();
