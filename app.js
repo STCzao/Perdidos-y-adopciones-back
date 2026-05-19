@@ -15,6 +15,11 @@ const colaboradoresRoutes = require("./routes/colaboradores");
 const { notFound, errorHandler } = require("./middlewares/error-handler");
 
 const sanitize = (obj, req) => {
+  if (Array.isArray(obj)) {
+    obj.forEach((item) => sanitize(item, req));
+    return obj;
+  }
+
   if (typeof obj !== "object" || obj === null) return obj;
 
   Object.keys(obj).forEach((key) => {
@@ -25,7 +30,7 @@ const sanitize = (obj, req) => {
         url: req.originalUrl,
       });
       delete obj[key];
-    } else if (typeof obj[key] === "object") {
+    } else {
       sanitize(obj[key], req);
     }
   });
@@ -49,6 +54,11 @@ const createLimiter = ({ development = {}, production = {}, ...baseConfig }) =>
     ...baseConfig,
     ...(process.env.NODE_ENV === "production" ? production : development),
   });
+
+const getRateLimitMax = (envKey, fallback) => {
+  const parsedValue = parseInt(process.env[envKey] ?? `${fallback}`, 10);
+  return Number.isNaN(parsedValue) ? fallback : parsedValue;
+};
 
 const getAllowedOrigins = (testMode) => {
   if (testMode) return "*";
@@ -83,8 +93,8 @@ const createApp = ({ testMode = false } = {}) => {
     message: { success: false, msg: "Demasiadas solicitudes. Intenta mas tarde." },
     standardHeaders: true,
     legacyHeaders: false,
-    production: { max: 5 },
-    development: { max: 50 },
+    production: { max: getRateLimitMax("RATE_LIMIT_COLABORADORES", 5) },
+    development: { max: getRateLimitMax("RATE_LIMIT_COLABORADORES_DEV", 50) },
   });
 
   app.set("trust proxy", 1);
@@ -129,10 +139,10 @@ const createApp = ({ testMode = false } = {}) => {
         standardHeaders: true,
         legacyHeaders: false,
         production: {
-          max: 10,
+          max: getRateLimitMax("RATE_LIMIT_LOGIN", 10),
         },
         development: {
-          max: 100,
+          max: getRateLimitMax("RATE_LIMIT_LOGIN_DEV", 100),
           skipFailedRequests: true,
         },
       }),
@@ -149,10 +159,10 @@ const createApp = ({ testMode = false } = {}) => {
         standardHeaders: true,
         legacyHeaders: false,
         production: {
-          max: 3,
+          max: getRateLimitMax("RATE_LIMIT_FORGOT_PASSWORD", 3),
         },
         development: {
-          max: 20,
+          max: getRateLimitMax("RATE_LIMIT_FORGOT_PASSWORD_DEV", 20),
           skipFailedRequests: true,
         },
       }),
@@ -169,11 +179,11 @@ const createApp = ({ testMode = false } = {}) => {
         standardHeaders: true,
         legacyHeaders: false,
         production: {
-          max: 30,
+          max: getRateLimitMax("RATE_LIMIT_REFRESH", 30),
           skipSuccessfulRequests: true,
         },
         development: {
-          max: 120,
+          max: getRateLimitMax("RATE_LIMIT_REFRESH_DEV", 120),
           skipFailedRequests: true,
         },
       }),
@@ -190,11 +200,11 @@ const createApp = ({ testMode = false } = {}) => {
         standardHeaders: true,
         legacyHeaders: false,
         production: {
-          max: 60,
+          max: getRateLimitMax("RATE_LIMIT_MI_PERFIL", 60),
           skipSuccessfulRequests: true,
         },
         development: {
-          max: 300,
+          max: getRateLimitMax("RATE_LIMIT_MI_PERFIL_DEV", 300),
           skipFailedRequests: true,
         },
       }),
@@ -211,10 +221,10 @@ const createApp = ({ testMode = false } = {}) => {
         standardHeaders: true,
         legacyHeaders: false,
         production: {
-          max: 100,
+          max: getRateLimitMax("RATE_LIMIT_GENERAL", 100),
         },
         development: {
-          max: 1000,
+          max: getRateLimitMax("RATE_LIMIT_GENERAL_DEV", 1000),
         },
       }),
     );

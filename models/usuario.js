@@ -65,7 +65,6 @@ const UsuarioSchema = Schema({
       createdAt: {
         type: Date,
         default: Date.now,
-        expires: 2592000,
       },
       device: String,
       ip: String,

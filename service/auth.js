@@ -9,7 +9,16 @@ const AppError = require("../helpers/AppError");
 const authRepository = require("../repositories/authRepository");
 const { buildRefreshTokenVerifyOptions } = require("../helpers/jwt-config");
 
-const hashResetToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
+const REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+const hashToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
+
+const limpiarTokensExpirados = (refreshTokens = []) => {
+  const ahora = Date.now();
+  return refreshTokens.filter(
+    (rt) => ahora - new Date(rt.createdAt).getTime() < REFRESH_TTL_MS,
+  );
+};
 
 const login = async ({ correo, password, userAgent, ip }) => {
   const usuario = await authRepository.findByCorreo(correo);
@@ -36,9 +45,9 @@ const login = async ({ correo, password, userAgent, ip }) => {
     generarRefreshToken(usuario.id),
   ]);
 
-  usuario.refreshTokens = usuario.refreshTokens || [];
+  usuario.refreshTokens = limpiarTokensExpirados(usuario.refreshTokens);
   usuario.refreshTokens.push({
-    token: refreshToken,
+    token: hashToken(refreshToken),
     device: userAgent || "Unknown",
     ip,
   });
@@ -72,7 +81,7 @@ const forgotPassword = async ({ correo, ip }) => {
   }
 
   const token = crypto.randomBytes(32).toString("hex");
-  const resetTokenHash = hashResetToken(token);
+  const resetTokenHash = hashToken(token);
   const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${token}`;
 
   await enviarEmail(
@@ -94,7 +103,7 @@ const forgotPassword = async ({ correo, ip }) => {
 };
 
 const resetPassword = async ({ token, password, ip }) => {
-  const usuario = await authRepository.findByResetTokenHash(hashResetToken(token));
+  const usuario = await authRepository.findByResetTokenHash(hashToken(token));
 
   if (!usuario) {
     logger.warn("Intento de reset con token invalido o expirado", {
@@ -141,7 +150,9 @@ const renovarToken = async ({ refreshToken, userAgent, ip }) => {
     throw new AppError("Refresh token invalido o expirado", 401);
   }
 
-  const usuario = await authRepository.findById(uid);
+  const usuario = await authRepository.findById(uid, {
+    select: "estado correo refreshTokens",
+  });
   if (!usuario) {
     throw new AppError("Usuario no encontrado", 401);
   }
@@ -153,7 +164,10 @@ const renovarToken = async ({ refreshToken, userAgent, ip }) => {
     throw new AppError("Usuario deshabilitado. Tokens invalidados.", 401);
   }
 
-  const tokenExiste = usuario.refreshTokens?.some((rt) => rt.token === refreshToken);
+  const refreshTokenHash = hashToken(refreshToken);
+  usuario.refreshTokens = limpiarTokensExpirados(usuario.refreshTokens);
+
+  const tokenExiste = usuario.refreshTokens?.some((rt) => rt.token === refreshTokenHash);
 
   if (!tokenExiste) {
     const tokensActuales = usuario.refreshTokens?.length || 0;
@@ -180,9 +194,11 @@ const renovarToken = async ({ refreshToken, userAgent, ip }) => {
     generarRefreshToken(usuario.id),
   ]);
 
-  usuario.refreshTokens = usuario.refreshTokens.filter((rt) => rt.token !== refreshToken);
+  usuario.refreshTokens = limpiarTokensExpirados(
+    usuario.refreshTokens.filter((rt) => rt.token !== refreshTokenHash),
+  );
   usuario.refreshTokens.push({
-    token: newRefreshToken,
+    token: hashToken(newRefreshToken),
     device: userAgent || "Unknown",
     ip,
   });
@@ -201,7 +217,8 @@ const logout = async ({ userId, refreshToken, correo, ip }) => {
   }
 
   if (refreshToken) {
-    usuario.refreshTokens = usuario.refreshTokens.filter((rt) => rt.token !== refreshToken);
+    const tokenHash = hashToken(refreshToken);
+    usuario.refreshTokens = usuario.refreshTokens.filter((rt) => rt.token !== tokenHash);
     await authRepository.save(usuario);
   }
 
