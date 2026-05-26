@@ -150,9 +150,7 @@ const renovarToken = async ({ refreshToken, userAgent, ip }) => {
     throw new AppError("Refresh token invalido o expirado", 401);
   }
 
-  const usuario = await authRepository.findById(uid, {
-    select: "estado correo refreshTokens",
-  });
+  const usuario = await authRepository.findById(uid);
   if (!usuario) {
     throw new AppError("Usuario no encontrado", 401);
   }
