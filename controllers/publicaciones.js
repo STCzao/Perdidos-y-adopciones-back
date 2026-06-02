@@ -105,6 +105,21 @@ const publicacionesAdminGet = async (req, res, next) => {
   }
 };
 
+const publicacionesCorregirTipoPost = async (req, res, next) => {
+  try {
+    const result = await publicacionService.corregirTipoPublicacion({
+      id: req.params.id,
+      body: req.body,
+      usuarioActual: req.usuario,
+      correo: req.usuario.correo,
+      ip: req.ip,
+    });
+    res.status(201).json({ success: true, msg: "Tipo de publicación corregido exitosamente", ...result });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const publicacionesExportar = async (req, res, next) => {
   try {
     const buffer = await publicacionService.exportarPublicaciones(req.query);
@@ -124,6 +139,7 @@ module.exports = {
   publicacionGet,
   publicacionesPost,
   publicacionesPut,
+  publicacionesCorregirTipoPost,
   publicacionesEstadoPut,
   publicacionesDelete,
   obtenerContactoPublicacion,

@@ -118,6 +118,91 @@ describe("service/publicaciones", () => {
     expect(eliminarImagen).toHaveBeenCalledWith(existente.imgs[1]);
   });
 
+  test("actualizarPublicacion rechaza el cambio de tipo con un error claro", async () => {
+    const existente = makeMockPub({ usuario: "uid-owner", tipo: "PERDIDO" });
+    Publicacion.findById.mockResolvedValue(existente);
+
+    const err = await publicacionService
+      .actualizarPublicacion({
+        id: "pub-id",
+        body: { tipo: "ADOPCION" },
+        usuarioActual: makeUsuario({ _id: "uid-owner" }),
+      })
+      .catch((error) => error);
+
+    expect(err).toBeInstanceOf(AppError);
+    expect(err.statusCode).toBe(400);
+    expect(err.message).toMatch(/correccion de tipo/i);
+  });
+
+  test("corregirTipoPublicacion crea una nueva publicacion y deja la original inactiva", async () => {
+    const existente = makeMockPub({
+      _id: "pub-original",
+      usuario: "uid-owner",
+      tipo: "PERDIDO",
+      estado: "SE BUSCA",
+      especie: "PERRO",
+      raza: "MESTIZO",
+      nombreanimal: "LUNA",
+      sexo: "HEMBRA",
+      [TAMANIO_KEY]: "MEDIANO",
+      color: "NEGRO",
+      edad: "JOVEN",
+      localidad: "SAN MIGUEL DE TUCUMAN",
+      lugar: "PLAZA",
+      fecha: "2026-06-01",
+      whatsapp: "3812345678",
+      imgs: ["https://res.cloudinary.com/demo/image/upload/v1/original.jpg"],
+    });
+
+    let createdData;
+    Publicacion.findById.mockResolvedValue(existente);
+    Publicacion.mockImplementation((data) => {
+      createdData = data;
+      const inst = { ...data, _id: "pub-nueva", populate: jest.fn().mockResolvedValue(undefined) };
+      inst.save = jest.fn().mockResolvedValue(inst);
+      return inst;
+    });
+    Publicacion.findByIdAndUpdate.mockReturnValue({
+      populate: jest.fn().mockResolvedValue({
+        ...existente,
+        estado: "INACTIVO",
+        reemplazadaPor: "pub-nueva",
+        motivoInactivacion: "CORRECCION_TIPO",
+      }),
+    });
+
+    const result = await publicacionService.corregirTipoPublicacion({
+      id: "pub-original",
+      body: {
+        tipo: "ADOPCION",
+        afinidad: "ALTA",
+        afinidadanimales: "MEDIA",
+        energia: "ALTA",
+        castrado: true,
+      },
+      usuarioActual: makeUsuario({ _id: "uid-owner" }),
+      correo: "user@test.com",
+      ip: "::1",
+    });
+
+    expect(createdData.tipo).toBe("ADOPCION");
+    expect(createdData.estado).toBe("EN BUSCA DE UN HOGAR");
+    expect(createdData.reemplaza).toBe("pub-original");
+    expect(createdData.localidad).toBeUndefined();
+    expect(createdData.afinidad).toBe("ALTA");
+    expect(Publicacion.findByIdAndUpdate).toHaveBeenCalledWith(
+      "pub-original",
+      expect.objectContaining({
+        estado: "INACTIVO",
+        reemplazadaPor: "pub-nueva",
+        motivoInactivacion: "CORRECCION_TIPO",
+      }),
+      expect.any(Object),
+    );
+    expect(result.publicacion._id).toBe("pub-nueva");
+  });
+
   test("eliminarPublicacion elimina todas las imagenes de Cloudinary antes de borrar", async () => {
     const pub = makeMockPub({
       usuario: "uid-owner",

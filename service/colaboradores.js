@@ -11,6 +11,21 @@ const DETALLE_MAP = {
   ECONOMICA: "detalleEconomico",
 };
 
+const formatearLista = (valores = []) => (Array.isArray(valores) ? valores.join("; ") : "");
+
+const obtenerDetalleTransitoExport = (detalle = {}) => ({
+  preferencia: detalle.preferencia || "",
+  periodos: formatearLista(detalle.periodos || detalle.opciones),
+  observaciones: detalle.observaciones || "",
+});
+
+const obtenerDetalleTrasladoExport = (detalle = {}) => ({
+  zonas: formatearLista(detalle.zonas || detalle.opciones),
+  disponibilidad: formatearLista(detalle.disponibilidad),
+  condicionAnimal: formatearLista(detalle.condicionAnimal),
+  observaciones: detalle.observaciones || "",
+});
+
 const registrarColaborador = async ({ body }) => {
   const {
     nombre,
@@ -142,9 +157,12 @@ const exportarColaboradores = async ({ localidad, forma }) => {
     { header: "Difusión", key: "DIFUSION", width: 10 },
     { header: "Coordinación", key: "COORDINACION", width: 14 },
     { header: "Colaboración económica", key: "ECONOMICA", width: 20 },
-    { header: "Detalle tránsito", key: "detTransito", width: 40 },
+    { header: "Prefiere tránsito", key: "prefTransito", width: 22 },
+    { header: "Períodos tránsito", key: "detTransito", width: 40 },
     { header: "Obs. tránsito", key: "obsTransito", width: 30 },
-    { header: "Detalle traslado", key: "detTraslado", width: 40 },
+    { header: "Zonas traslado", key: "detTraslado", width: 40 },
+    { header: "Disponibilidad traslado", key: "dispTraslado", width: 32 },
+    { header: "Condición animal", key: "condTraslado", width: 24 },
     { header: "Obs. traslado", key: "obsTraslado", width: 30 },
     { header: "Detalle avistamiento", key: "detAvistamiento", width: 40 },
     { header: "Obs. avistamiento", key: "obsAvistamiento", width: 30 },
@@ -166,6 +184,8 @@ const exportarColaboradores = async ({ localidad, forma }) => {
 
   colaboradores.forEach((c) => {
     const formas = c.formasColaboracion || [];
+    const detalleTransito = obtenerDetalleTransitoExport(c.detalleTransito);
+    const detalleTraslado = obtenerDetalleTrasladoExport(c.detalleTraslado);
 
     worksheet.addRow({
       nombre: c.nombre,
@@ -180,10 +200,13 @@ const exportarColaboradores = async ({ localidad, forma }) => {
       DIFUSION: formas.includes("DIFUSION") ? "Sí" : "NO",
       COORDINACION: formas.includes("COORDINACION") ? "Sí" : "NO",
       ECONOMICA: formas.includes("ECONOMICA") ? "Sí" : "NO",
-      detTransito: c.detalleTransito?.opciones?.join("; ") || "",
-      obsTransito: c.detalleTransito?.observaciones || "",
-      detTraslado: c.detalleTraslado?.opciones?.join("; ") || "",
-      obsTraslado: c.detalleTraslado?.observaciones || "",
+      prefTransito: detalleTransito.preferencia,
+      detTransito: detalleTransito.periodos,
+      obsTransito: detalleTransito.observaciones,
+      detTraslado: detalleTraslado.zonas,
+      dispTraslado: detalleTraslado.disponibilidad,
+      condTraslado: detalleTraslado.condicionAnimal,
+      obsTraslado: detalleTraslado.observaciones,
       detAvistamiento: c.detalleAvistamiento?.opciones?.join("; ") || "",
       obsAvistamiento: c.detalleAvistamiento?.observaciones || "",
       detDifusion: c.detalleDifusion?.opciones?.join("; ") || "",

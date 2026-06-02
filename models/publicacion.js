@@ -127,6 +127,21 @@ const PublicacionSchema = Schema({
     ref: "Usuario",
     required: true,
   },
+  reemplaza: {
+    type: Schema.Types.ObjectId,
+    ref: "Publicacion",
+    default: null,
+  },
+  reemplazadaPor: {
+    type: Schema.Types.ObjectId,
+    ref: "Publicacion",
+    default: null,
+  },
+  motivoInactivacion: {
+    type: String,
+    enum: ["CORRECCION_TIPO"],
+    default: null,
+  },
   imgs: {
     type: [
       {

@@ -23,6 +23,25 @@ const ESTADO_DEFECTO = {
   ENCONTRADO: "BUSCANDO A SU FAMILIA",
   ADOPCION: "EN BUSCA DE UN HOGAR",
 };
+const TIPOS_CON_UBICACION = new Set(["PERDIDO", "ENCONTRADO"]);
+const CAMPOS_COMPARTIDOS = [
+  "nombreanimal",
+  "especie",
+  "raza",
+  "sexo",
+  TAMANIO_KEY,
+  "color",
+  "edad",
+  "detalles",
+  "whatsapp",
+  "localidad",
+  "lugar",
+  "fecha",
+  "afinidad",
+  "afinidadanimales",
+  "energia",
+  "castrado",
+];
 
 const normalizarImagenes = ({ imgs, img } = {}) => {
   if (Array.isArray(imgs)) {
@@ -48,6 +67,53 @@ const construirRegexBusqueda = (search) => {
   const termino = typeof search === "string" ? search.trim().slice(0, 100) : "";
   if (!termino) return null;
   return { $regex: escaparRegex(termino), $options: "i" };
+};
+
+const construirDatosPublicacion = ({ datos, usuarioId, tipo = datos.tipo, estado, extra = {} }) => {
+  const tipoNormalizado = normalizarTexto(tipo);
+  const datosNormalizados = {
+    tipo: tipoNormalizado,
+    nombreanimal: datos.nombreanimal ? normalizarTexto(datos.nombreanimal) : undefined,
+    especie: normalizarTexto(datos.especie),
+    raza: normalizarTexto(datos.raza),
+    sexo: normalizarTexto(datos.sexo),
+    [TAMANIO_KEY]: normalizarTexto(datos[TAMANIO_KEY]),
+    color: normalizarTexto(datos.color),
+    edad: datos.edad ? normalizarTexto(datos.edad) : undefined,
+    detalles: datos.detalles ? normalizarTexto(datos.detalles) : undefined,
+    castrado: datos.castrado,
+    whatsapp: datos.whatsapp,
+    imgs: normalizarImagenes(datos),
+    usuario: usuarioId,
+    estado: estado ?? ESTADO_DEFECTO[tipoNormalizado],
+    ...extra,
+  };
+
+  if (TIPOS_CON_UBICACION.has(tipoNormalizado)) {
+    datosNormalizados.localidad = normalizarTexto(datos.localidad);
+    datosNormalizados.lugar = normalizarTexto(datos.lugar);
+    datosNormalizados.fecha = datos.fecha;
+  }
+
+  if (tipoNormalizado === "ADOPCION") {
+    datosNormalizados.afinidad = normalizarTexto(datos.afinidad);
+    datosNormalizados.afinidadanimales = normalizarTexto(datos.afinidadanimales);
+    datosNormalizados.energia = normalizarTexto(datos.energia);
+  }
+
+  return datosNormalizados;
+};
+
+const extraerBasePublicacion = (publicacion) => {
+  const base = { imgs: obtenerImagenesPublicacion(publicacion) };
+
+  CAMPOS_COMPARTIDOS.forEach((campo) => {
+    if (publicacion[campo] !== undefined) {
+      base[campo] = publicacion[campo];
+    }
+  });
+
+  return base;
 };
 
 const getPublicaciones = async ({
@@ -163,36 +229,8 @@ const getPublicacion = async ({ id }) => {
 
 const crearPublicacion = async ({ body, usuarioId, correo, ip }) => {
   const { estado, usuario, ...datos } = body;
-
   const tipoNormalizado = normalizarTexto(datos.tipo);
-  const datosNormalizados = {
-    tipo: tipoNormalizado,
-    nombreanimal: datos.nombreanimal ? normalizarTexto(datos.nombreanimal) : undefined,
-    especie: normalizarTexto(datos.especie),
-    raza: normalizarTexto(datos.raza),
-    sexo: normalizarTexto(datos.sexo),
-    [TAMANIO_KEY]: normalizarTexto(datos[TAMANIO_KEY]),
-    color: normalizarTexto(datos.color),
-    edad: datos.edad ? normalizarTexto(datos.edad) : undefined,
-    detalles: datos.detalles ? normalizarTexto(datos.detalles) : undefined,
-    castrado: datos.castrado,
-    whatsapp: datos.whatsapp,
-    imgs: normalizarImagenes(datos),
-    usuario: usuarioId,
-    estado: ESTADO_DEFECTO[tipoNormalizado],
-  };
-
-  if (tipoNormalizado === "PERDIDO" || tipoNormalizado === "ENCONTRADO") {
-    datosNormalizados.localidad = normalizarTexto(datos.localidad);
-    datosNormalizados.lugar = normalizarTexto(datos.lugar);
-    datosNormalizados.fecha = datos.fecha;
-  }
-
-  if (tipoNormalizado === "ADOPCION") {
-    datosNormalizados.afinidad = normalizarTexto(datos.afinidad);
-    datosNormalizados.afinidadanimales = normalizarTexto(datos.afinidadanimales);
-    datosNormalizados.energia = normalizarTexto(datos.energia);
-  }
+  const datosNormalizados = construirDatosPublicacion({ datos, usuarioId });
 
   const publicacion = publicacionesRepository.create(datosNormalizados);
   const publicacionDB = await publicacionesRepository.save(publicacion);
@@ -221,6 +259,13 @@ const actualizarPublicacion = async ({ id, body, usuarioActual }) => {
     usuarioActual.rol !== "ADMIN_ROLE"
   ) {
     throw new AppError("No tiene permisos para editar esta publicacion", 403);
+  }
+
+  if (resto.tipo !== undefined && normalizarTexto(resto.tipo) !== publicacionExistente.tipo) {
+    throw new AppError(
+      "El tipo de publicacion no puede modificarse desde edicion. Use el flujo de correccion de tipo.",
+      400,
+    );
   }
 
   const imagenesActuales = obtenerImagenesPublicacion(publicacionExistente);
@@ -269,6 +314,70 @@ const actualizarPublicacion = async ({ id, body, usuarioActual }) => {
   );
 
   return { publicacion: publicacionActualizada };
+};
+
+const corregirTipoPublicacion = async ({ id, body, usuarioActual, correo, ip }) => {
+  const { _id, usuario, estado, reemplaza, reemplazadaPor, motivoInactivacion, ...resto } = body;
+  const publicacionExistente = await publicacionesRepository.findById(id);
+
+  if (!publicacionExistente) {
+    throw new AppError("Publicacion no encontrada", 404);
+  }
+
+  if (
+    publicacionExistente.usuario.toString() !== usuarioActual._id.toString() &&
+    usuarioActual.rol !== "ADMIN_ROLE"
+  ) {
+    throw new AppError("No tiene permisos para corregir esta publicacion", 403);
+  }
+
+  if (publicacionExistente.estado === "INACTIVO") {
+    throw new AppError("No se puede corregir el tipo de una publicacion inactiva", 400);
+  }
+
+  const nuevoTipo = normalizarTexto(resto.tipo);
+  if (nuevoTipo === publicacionExistente.tipo) {
+    throw new AppError("El nuevo tipo debe ser distinto al tipo actual", 400);
+  }
+
+  const datosBase = extraerBasePublicacion(publicacionExistente);
+  const datosNuevaPublicacion = construirDatosPublicacion({
+    datos: {
+      ...datosBase,
+      ...resto,
+      tipo: nuevoTipo,
+      imgs: resto.imgs ?? datosBase.imgs,
+    },
+    usuarioId: publicacionExistente.usuario,
+    tipo: nuevoTipo,
+    estado: ESTADO_DEFECTO[nuevoTipo],
+    extra: { reemplaza: publicacionExistente._id },
+  });
+
+  const nuevaPublicacion = publicacionesRepository.create(datosNuevaPublicacion);
+  const publicacionDB = await publicacionesRepository.save(nuevaPublicacion);
+  await publicacionesRepository.populateUsuario(publicacionDB, "nombre");
+
+  const publicacionOriginal = await publicacionesRepository.findByIdAndUpdate(
+    id,
+    {
+      estado: "INACTIVO",
+      reemplazadaPor: publicacionDB._id,
+      motivoInactivacion: "CORRECCION_TIPO",
+    },
+    { new: true, populate: { path: "usuario", select: "nombre" } },
+  );
+
+  logger.info("Tipo de publicacion corregido", {
+    publicacionOriginalId: id,
+    publicacionNuevaId: publicacionDB._id,
+    tipoAnterior: publicacionExistente.tipo,
+    tipoNuevo: nuevoTipo,
+    usuario: correo,
+    ip,
+  });
+
+  return { publicacion: publicacionDB, publicacionOriginal };
 };
 
 const cambiarEstadoPublicacion = async ({ id, estado, usuarioActual, correo, ip }) => {
@@ -487,6 +596,7 @@ module.exports = {
   getPublicacion,
   crearPublicacion,
   actualizarPublicacion,
+  corregirTipoPublicacion,
   cambiarEstadoPublicacion,
   eliminarPublicacion,
   getContacto,

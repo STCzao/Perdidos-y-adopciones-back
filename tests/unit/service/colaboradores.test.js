@@ -21,15 +21,22 @@ describe("service/colaboradores", () => {
         localidad: "SAN MIGUEL DE TUCUMAN",
         barrio: "Centro",
         formasColaboracion: ["TRANSITO"],
-        disponibilidadGeneral: "URGENCIAS",
         aceptaContactoWhatsapp: true,
         aceptaTerminos: true,
-        detalleTransito: { opciones: ["PERROS"], observaciones: "ok" },
+        detalleTransito: {
+          preferencia: "PERROS",
+          periodos: ["TRANSITO_CORTO_O_DE_EMERGENCIA"],
+          observaciones: "ok",
+        },
         detalleDifusion: { opciones: ["IG"], observaciones: "no deberia guardarse" },
       },
     });
 
-    expect(savedData.detalleTransito).toEqual({ opciones: ["PERROS"], observaciones: "ok" });
+    expect(savedData.detalleTransito).toEqual({
+      preferencia: "PERROS",
+      periodos: ["TRANSITO_CORTO_O_DE_EMERGENCIA"],
+      observaciones: "ok",
+    });
     expect(savedData.detalleDifusion).toBeUndefined();
     expect(result.colaborador).toBeDefined();
   });
