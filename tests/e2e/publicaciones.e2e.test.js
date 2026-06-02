@@ -214,6 +214,50 @@ describe("E2E: /api/publicaciones", () => {
 
       expect(res.status).toBe(401);
     });
+
+    test("400 si intenta cambiar el tipo desde la edicion normal", async () => {
+      const owner = await createUser({ correo: "edit-tipo@test.com", rawPassword: "password123" });
+      const pub = await createPublicacion(owner._id, { estado: "SE BUSCA", tipo: "PERDIDO" });
+      const token = await loginAs("edit-tipo@test.com");
+
+      const res = await request(app)
+        .put(`/api/publicaciones/${pub._id}`)
+        .set("x-token", token)
+        .send({ tipo: "ADOPCION" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.msg).toMatch(/correccion de tipo/i);
+    });
+  });
+
+  describe("POST /api/publicaciones/:id/corregir-tipo", () => {
+    test("201 crea una nueva publicacion y desactiva la original", async () => {
+      const owner = await createUser({ correo: "corrige@test.com", rawPassword: "password123" });
+      const pub = await createPublicacion(owner._id, {
+        tipo: "PERDIDO",
+        estado: "SE BUSCA",
+        localidad: "SAN MIGUEL DE TUCUMAN",
+        lugar: "PARQUE 9 DE JULIO",
+        fecha: "2026-03-19",
+      });
+      const token = await loginAs("corrige@test.com");
+
+      const res = await request(app)
+        .post(`/api/publicaciones/${pub._id}/corregir-tipo`)
+        .set("x-token", token)
+        .send({
+          tipo: "ADOPCION",
+          afinidad: "ALTA",
+          afinidadanimales: "MEDIA",
+          energia: "ALTA",
+          castrado: true,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.publicacion.tipo).toBe("ADOPCION");
+      expect(res.body.publicacion.estado).toBe("EN BUSCA DE UN HOGAR");
+      expect(res.body.publicacionOriginal.estado).toBe("INACTIVO");
+    });
   });
 
   // ─── GET /admin/todas ─────────────────────────────────────────────────────────

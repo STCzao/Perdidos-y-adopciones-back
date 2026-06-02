@@ -6,6 +6,7 @@ const { validarCampos } = require("../middlewares/validar-campos");
 const TIPOS = ["PERDIDO", "ENCONTRADO", "ADOPCION"];
 const ESPECIES = ["PERRO", "GATO", "AVE", "CONEJO", "OTRO"];
 const SEXOS = ["MACHO", "HEMBRA", "DESCONOZCO"];
+const TAMANIO_KEY = "tamaño";
 const TAMANIOS = ["MINI", "PEQUEÑO", "MEDIANO", "GRANDE", "SIN ESPECIFICAR"];
 const EDADES = ["CACHORRO", "JOVEN", "ADULTO", "MAYOR", "SIN ESPECIFICAR"];
 const AFINIDADES = ["ALTA", "MEDIA", "BAJA", "DESCONOZCO"];
@@ -136,9 +137,7 @@ const nombreAnimalValidators = (optional = false) => [
       }
       return true;
     }),
-  ...(optional
-    ? stringOpcional("nombreanimal", "El nombre del animal", { min: 2, max: 60 })
-    : stringOpcional("nombreanimal", "El nombre del animal", { min: 2, max: 60 })),
+  ...stringOpcional("nombreanimal", "El nombre del animal", { min: 2, max: 60 }),
 ];
 
 const edadValidators = (optional = false) => [
@@ -176,9 +175,7 @@ const ubicacionValidators = (optional = false) => [
       }
       return true;
     }),
-  ...(optional
-    ? stringOpcional("lugar", "El lugar", { min: 5, max: 80 })
-    : stringOpcional("lugar", "El lugar", { min: 5, max: 80 })),
+  ...stringOpcional("lugar", "El lugar", { min: 5, max: 80 }),
   check("fecha")
     .if((_value, { req }) => !optional || req.body.fecha !== undefined)
     .custom((value, { req }) => {
@@ -220,7 +217,7 @@ const adopcionValidators = (optional = false) => [
     .if((_value, { req }) => !optional || req.body.energia !== undefined)
     .custom((value, { req }) => {
       if (!optional && req.body.tipo === "ADOPCION" && !value) {
-        throw new Error("El nivel de energía es obligatorio para adopciones");
+        throw new Error("El nivel de energia es obligatorio para adopciones");
       }
       if (value && !ENERGIAS.includes(value)) {
         throw new Error("Nivel de energía no válido");
@@ -246,7 +243,7 @@ const createPublicacionValidator = [
   ...razaValidators(false),
   ...nombreAnimalValidators(false),
   enumValidator("sexo", SEXOS, "El sexo es obligatorio", "Sexo no válido"),
-  enumValidator("tamaño", TAMANIOS, "El tamaño es obligatorio", "Tamaño no válido"),
+  enumValidator(TAMANIO_KEY, TAMANIOS, "El tamaño es obligatorio", "Tamaño no válido"),
   ...stringRequerido("color", "El color", { min: 2, max: 50 }),
   ...edadValidators(false),
   ...ubicacionValidators(false),
@@ -273,7 +270,7 @@ const updatePublicacionValidator = [
   ...razaValidators(true),
   ...nombreAnimalValidators(true),
   enumValidator("sexo", SEXOS, "El sexo es obligatorio", "Sexo no válido", true),
-  enumValidator("tamaño", TAMANIOS, "El tamaño es obligatorio", "Tamaño no válido", true),
+  enumValidator(TAMANIO_KEY, TAMANIOS, "El tamaño es obligatorio", "Tamaño no válido", true),
   ...stringOpcional("color", "El color", { min: 2, max: 50 }),
   ...edadValidators(true),
   ...ubicacionValidators(true),
@@ -288,9 +285,42 @@ const updatePublicacionValidator = [
   validarCampos,
 ];
 
+const prohibirCambioEnCorreccion = (campo, mensaje) =>
+  check(campo).custom((value, { req }) => {
+    if (Object.prototype.hasOwnProperty.call(req.body, campo)) {
+      throw new Error(mensaje);
+    }
+    return true;
+  });
+
+const corregirTipoPublicacionValidator = [
+  check("id", "No es un ID válido").isMongoId(),
+  check("tipo", "El tipo es obligatorio").isIn(TIPOS),
+  enumValidator("especie", ESPECIES, "La especie es obligatoria", "Especie no válida", true),
+  ...razaValidators(true),
+  ...nombreAnimalValidators(true),
+  enumValidator("sexo", SEXOS, "El sexo es obligatorio", "Sexo no válido", true),
+  enumValidator(TAMANIO_KEY, TAMANIOS, "El tamaño es obligatorio", "Tamaño no válido", true),
+  ...stringOpcional("color", "El color", { min: 2, max: 50 }),
+  ...edadValidators(true),
+  ...ubicacionValidators(true),
+  ...adopcionValidators(true),
+  ...stringOpcional("detalles", "Los detalles", { min: 5, max: 250 }),
+  ...stringOpcional("whatsapp", "El WhatsApp", { min: 10, max: 15 }),
+  check("whatsapp")
+    .optional()
+    .matches(soloNumeros)
+    .withMessage("El formato de WhatsApp no es válido (solo números, sin +)"),
+  validarImgs(false),
+  prohibirCambioEnCorreccion("estado", "El estado no puede enviarse en la corrección de tipo"),
+  prohibirCambioEnCorreccion("usuario", "El usuario no puede modificarse en la corrección de tipo"),
+  validarCampos,
+];
+
 module.exports = {
   publicacionIdValidator,
   createPublicacionValidator,
   estadoPublicacionValidator,
   updatePublicacionValidator,
+  corregirTipoPublicacionValidator,
 };

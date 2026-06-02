@@ -333,18 +333,21 @@ describe("service/publicaciones — integración", () => {
 
   // ─── actualizarPublicacion ───────────────────────────────────────────────────
   describe("actualizarPublicacion", () => {
-    test("no permite cambiar el tipo", async () => {
+    test("rechaza el cambio de tipo y mantiene la publicacion original", async () => {
       const user = await createUser();
       const pub = await createPublicacion(user._id, { tipo: "PERDIDO", estado: "SE BUSCA" });
 
-      await publicacionService.actualizarPublicacion({
-        id: pub._id.toString(),
-        body: { tipo: "ADOPCION", color: "BLANCO" },
-        usuarioActual: user,
-      });
+      await expect(
+        publicacionService.actualizarPublicacion({
+          id: pub._id.toString(),
+          body: { tipo: "ADOPCION", color: "BLANCO" },
+          usuarioActual: user,
+        })
+      ).rejects.toMatchObject({ statusCode: 400 });
 
       const inDB = await Publicacion.findById(pub._id);
       expect(inDB.tipo).toBe("PERDIDO");
+      expect(inDB.color).toBe("NEGRO");
     });
 
     test("no permite cambiar el estado vía actualizar", async () => {
@@ -373,6 +376,45 @@ describe("service/publicaciones — integración", () => {
           usuarioActual: other,
         })
       ).rejects.toMatchObject({ statusCode: 403 });
+    });
+  });
+
+  describe("corregirTipoPublicacion", () => {
+    test("crea una nueva publicacion con el tipo corregido e inactiva la original", async () => {
+      const user = await createUser();
+      const pub = await createPublicacion(user._id, {
+        tipo: "PERDIDO",
+        estado: "SE BUSCA",
+        localidad: "SAN MIGUEL DE TUCUMAN",
+        lugar: "PARQUE 9 DE JULIO",
+        fecha: "2026-03-19",
+      });
+
+      const result = await publicacionService.corregirTipoPublicacion({
+        id: pub._id.toString(),
+        body: {
+          tipo: "ADOPCION",
+          afinidad: "ALTA",
+          afinidadanimales: "MEDIA",
+          energia: "ALTA",
+          castrado: true,
+        },
+        usuarioActual: user,
+        correo: user.correo,
+        ip: "::1",
+      });
+
+      const original = await Publicacion.findById(pub._id);
+      const nueva = await Publicacion.findById(result.publicacion._id);
+
+      expect(original.estado).toBe("INACTIVO");
+      expect(original.reemplazadaPor.toString()).toBe(nueva._id.toString());
+      expect(original.motivoInactivacion).toBe("CORRECCION_TIPO");
+      expect(nueva.tipo).toBe("ADOPCION");
+      expect(nueva.estado).toBe("EN BUSCA DE UN HOGAR");
+      expect(nueva.reemplaza.toString()).toBe(original._id.toString());
+      expect(nueva.localidad).toBeUndefined();
+      expect(nueva.afinidad).toBe("ALTA");
     });
   });
 

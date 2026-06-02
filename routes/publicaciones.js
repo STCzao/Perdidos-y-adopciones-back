@@ -6,6 +6,7 @@ const {
   publicacionGet,
   publicacionesPost,
   publicacionesPut,
+  publicacionesCorregirTipoPost,
   publicacionesEstadoPut,
   publicacionesDelete,
   obtenerContactoPublicacion,
@@ -19,6 +20,7 @@ const {
   createPublicacionValidator,
   estadoPublicacionValidator,
   updatePublicacionValidator,
+  corregirTipoPublicacionValidator,
 } = require("../validators/publicacionesValidator");
 
 const router = Router();
@@ -40,6 +42,8 @@ router.get("/contacto/:id", [validarJWT, ...publicacionIdValidator], obtenerCont
 router.get("/:id", publicacionIdValidator, publicacionGet);
 
 router.post("/", [validarJWT, ...createPublicacionValidator], publicacionesPost);
+
+router.post("/:id/corregir-tipo", [validarJWT, ...corregirTipoPublicacionValidator], publicacionesCorregirTipoPost);
 
 router.put("/:id/estado", [validarJWT, ...estadoPublicacionValidator], publicacionesEstadoPut);
 
