@@ -10,6 +10,10 @@ const {
   ZONAS_TRASLADO,
   DISPONIBILIDAD_TRASLADO,
   CONDICIONES_ANIMAL_TRASLADO,
+  OPCIONES_AVISTAMIENTO,
+  OPCIONES_DIFUSION,
+  OPCIONES_COORDINACION,
+  OPCIONES_ECONOMICO,
 } = require("../models/colaborador");
 
 const soloNumeros = /^[0-9]{7,15}$/;
@@ -17,9 +21,12 @@ const soloNumeros = /^[0-9]{7,15}$/;
 const incluyeForma = (req, forma) =>
   Array.isArray(req.body.formasColaboracion) && req.body.formasColaboracion.includes(forma);
 
-const detalleValidator = (campo) => [
+const detalleValidator = (campo, opcionesPermitidas) => [
   check(`${campo}.opciones`).optional().isArray(),
-  check(`${campo}.opciones.*`).optional().isString(),
+  check(`${campo}.opciones.*`)
+    .optional()
+    .isIn(opcionesPermitidas)
+    .withMessage(`Una de las opciones de ${campo} no es válida`),
   check(`${campo}.observaciones`).optional().isString().isLength({ max: 500 }),
 ];
 
@@ -122,7 +129,7 @@ const registrarColaboradorValidator = [
     return true;
   }),
 
-  ...detalleValidator("detalleAvistamiento"),
+  ...detalleValidator("detalleAvistamiento", OPCIONES_AVISTAMIENTO),
   check("detalleAvistamiento").custom((value, { req }) => {
     if (!incluyeForma(req, "AVISTAMIENTO")) return true;
     if (!value || !Array.isArray(value.opciones) || value.opciones.length === 0) {
@@ -131,7 +138,7 @@ const registrarColaboradorValidator = [
     return true;
   }),
 
-  ...detalleValidator("detalleDifusion"),
+  ...detalleValidator("detalleDifusion", OPCIONES_DIFUSION),
   check("detalleDifusion").custom((value, { req }) => {
     if (!incluyeForma(req, "DIFUSION")) return true;
     if (!value || !Array.isArray(value.opciones) || value.opciones.length === 0) {
@@ -140,7 +147,7 @@ const registrarColaboradorValidator = [
     return true;
   }),
 
-  ...detalleValidator("detalleCoordinacion"),
+  ...detalleValidator("detalleCoordinacion", OPCIONES_COORDINACION),
   check("detalleCoordinacion").custom((value, { req }) => {
     if (!incluyeForma(req, "COORDINACION")) return true;
     if (!value || !Array.isArray(value.opciones) || value.opciones.length === 0) {
@@ -149,7 +156,7 @@ const registrarColaboradorValidator = [
     return true;
   }),
 
-  ...detalleValidator("detalleEconomico"),
+  ...detalleValidator("detalleEconomico", OPCIONES_ECONOMICO),
   check("detalleEconomico").custom((value, { req }) => {
     if (!incluyeForma(req, "ECONOMICA")) return true;
     if (!value || !Array.isArray(value.opciones) || value.opciones.length === 0) {

@@ -28,7 +28,7 @@ describe("service/colaboradores", () => {
           periodos: ["TRANSITO_CORTO_O_DE_EMERGENCIA"],
           observaciones: "ok",
         },
-        detalleDifusion: { opciones: ["IG"], observaciones: "no deberia guardarse" },
+        detalleDifusion: { opciones: ["INSTAGRAM"], observaciones: "no deberia guardarse" },
       },
     });
 

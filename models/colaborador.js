@@ -40,14 +40,36 @@ const DISPONIBILIDAD_TRASLADO = [
   "SOLO_CON_COORDINACION_PREVIA",
 ];
 const CONDICIONES_ANIMAL_TRASLADO = ["SANO", "EN_TRATAMIENTO"];
+const OPCIONES_AVISTAMIENTO = [
+  "PUEDO_SALIR_A_BUSCAR_CERCA_DE_MI_CASA",
+  "PUEDO_RECORRER_VARIAS_CUADRAS_O_BARRIOS_CERCANOS",
+  "PUEDO_REPORTAR_POSIBLES_CASOS_DE_ANIMALES_QUE_NECESITEN_AYUDA",
+];
+const OPCIONES_DIFUSION = [
+  "FACEBOOK",
+  "INSTAGRAM",
+  "WHATSAPP",
+  "CARGAR_CASOS_EN_LA_BASE_DE_DATOS",
+];
+const OPCIONES_COORDINACION = [
+  "CONTACTAR_PERSONAS_DE_LA_RED",
+  "SEGUIMIENTO_DE_CASOS",
+  "ORGANIZAR_INFO_DE_LA_BASE_DE_DATOS",
+];
+const OPCIONES_ECONOMICO = [
+  "COLABORACION_OCASIONAL",
+  "COLABORACION_ANTE_URGENCIAS",
+  "CON_ALIMENTO_O_MEDICAMENTOS",
+];
 
-const detalleSubSchema = new Schema(
-  {
-    opciones: [String],
-    observaciones: { type: String, maxlength: 500 },
-  },
-  { _id: false },
-);
+const crearDetalleOpcionesSchema = (opcionesPermitidas) =>
+  new Schema(
+    {
+      opciones: [{ type: String, enum: opcionesPermitidas }],
+      observaciones: { type: String, maxlength: 500 },
+    },
+    { _id: false },
+  );
 
 const detalleTransitoSchema = new Schema(
   {
@@ -84,10 +106,10 @@ const ColaboradorSchema = Schema({
   },
   detalleTransito: { type: detalleTransitoSchema },
   detalleTraslado: { type: detalleTrasladoSchema },
-  detalleAvistamiento: { type: detalleSubSchema },
-  detalleDifusion: { type: detalleSubSchema },
-  detalleCoordinacion: { type: detalleSubSchema },
-  detalleEconomico: { type: detalleSubSchema },
+  detalleAvistamiento: { type: crearDetalleOpcionesSchema(OPCIONES_AVISTAMIENTO) },
+  detalleDifusion: { type: crearDetalleOpcionesSchema(OPCIONES_DIFUSION) },
+  detalleCoordinacion: { type: crearDetalleOpcionesSchema(OPCIONES_COORDINACION) },
+  detalleEconomico: { type: crearDetalleOpcionesSchema(OPCIONES_ECONOMICO) },
   disponibilidadGeneral: { type: String, enum: DISPONIBILIDAD_GENERAL },
   momentosDisponibilidad: [{ type: String, enum: MOMENTOS }],
   aceptaContactoWhatsapp: { type: Boolean, required: true },
@@ -124,3 +146,7 @@ module.exports.PERIODOS_TRANSITO = PERIODOS_TRANSITO;
 module.exports.ZONAS_TRASLADO = ZONAS_TRASLADO;
 module.exports.DISPONIBILIDAD_TRASLADO = DISPONIBILIDAD_TRASLADO;
 module.exports.CONDICIONES_ANIMAL_TRASLADO = CONDICIONES_ANIMAL_TRASLADO;
+module.exports.OPCIONES_AVISTAMIENTO = OPCIONES_AVISTAMIENTO;
+module.exports.OPCIONES_DIFUSION = OPCIONES_DIFUSION;
+module.exports.OPCIONES_COORDINACION = OPCIONES_COORDINACION;
+module.exports.OPCIONES_ECONOMICO = OPCIONES_ECONOMICO;

@@ -23,16 +23,23 @@ const COLABORADOR_VALIDO = {
   formasColaboracion: ["TRANSITO", "TRASLADO", "DIFUSION"],
   detalleTransito: {
     preferencia: "PERROS_O_GATOS",
-    periodos: ["TRANSITO_CORTO_O_DE_EMERGENCIA", "TRANSITO_HASTA_ADOPCION"],
+    periodos: [
+      "TRANSITO_CORTO_O_DE_EMERGENCIA",
+      "TRANSITO_HASTA_ADOPCION",
+      "TRANSITO_POSTOPERATORIO_O_RECUPERACION",
+    ],
     observaciones: "Lugar para uno",
   },
   detalleTraslado: {
-    zonas: ["TRASLADOS_EN_MI_ZONA"],
+    zonas: ["TRASLADOS_EN_MI_ZONA", "TRASLADOS_DENTRO_DE_SAN_MIGUEL_DE_TUCUMAN"],
     disponibilidad: ["PODRIA_COLABORAR_ANTE_URGENCIAS"],
     condicionAnimal: ["SANO", "EN_TRATAMIENTO"],
-    observaciones: "Solo con coordinación previa si es lejos",
+    observaciones: "Solo con coordinacion previa si es lejos",
   },
-  detalleDifusion: { opciones: ["INSTAGRAM"] },
+  detalleDifusion: {
+    opciones: ["INSTAGRAM", "CARGAR_CASOS_EN_LA_BASE_DE_DATOS"],
+    observaciones: "Ayudo con publicaciones y carga",
+  },
   aceptaContactoWhatsapp: true,
   quiereGruposWhatsapp: true,
   prefiereContactoIndividual: false,
@@ -55,6 +62,33 @@ describe("E2E: /api/colaboradores", () => {
     expect(res.status).toBe(201);
     expect(res.body.colaborador).toBeDefined();
     expect(res.body.colaborador.nombre).toBe("Ana Perez");
+    expect(res.body.colaborador.detalleTransito.periodos).toContain(
+      "TRANSITO_POSTOPERATORIO_O_RECUPERACION",
+    );
+    expect(res.body.colaborador.detalleTraslado.zonas).toContain(
+      "TRASLADOS_DENTRO_DE_SAN_MIGUEL_DE_TUCUMAN",
+    );
+    expect(res.body.colaborador.detalleDifusion.opciones).toContain(
+      "CARGAR_CASOS_EN_LA_BASE_DE_DATOS",
+    );
+  });
+
+  test("POST /api/colaboradores rechaza opciones no alineadas para avistamiento", async () => {
+    const payload = {
+      ...COLABORADOR_VALIDO,
+      formasColaboracion: ["AVISTAMIENTO"],
+      detalleTransito: undefined,
+      detalleTraslado: undefined,
+      detalleDifusion: undefined,
+      detalleAvistamiento: {
+        opciones: ["SALGO_A_BUSCAR"],
+        observaciones: "Disponible por la tarde",
+      },
+    };
+
+    const res = await request(app).post("/api/colaboradores").send(payload);
+
+    expect(res.status).toBe(400);
   });
 
   test("GET /api/colaboradores requiere admin", async () => {
