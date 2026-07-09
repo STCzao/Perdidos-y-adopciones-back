@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git log *)",
+      "Bash(grep -rln \"require\\(.\\\\{0,3\\\\}database/config\" tests/)",
+      "Bash(grep -rn \"connect\\\\\\(\" tests/setup/*.js tests/e2e/*.js tests/integration/*.js)",
+      "Bash(grep -rn \"database/config\" tests/)",
+      "Bash(grep -rln \"connect\\(\" tests/setup tests/e2e tests/integration)"
+    ]
+  }
+}
