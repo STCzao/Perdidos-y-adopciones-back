@@ -56,6 +56,12 @@ const UsuarioSchema = Schema({
   },
   resetToken: { type: String },
   resetTokenExp: { type: Date },
+  // NUNCA agregar `expires` a este `createdAt`. Al estar dentro de un array de
+  // subdocumentos, Mongoose lo traduce en un índice TTL a nivel de colección:
+  // cuando un elemento del array vence, Mongo borra el USUARIO ENTERO, no solo
+  // el token. Esto ya causó el borrado masivo de +100 usuarios en producción.
+  // La expiración de estos tokens se maneja manualmente en código
+  // (ver service/auth.js, limpiarTokensExpirados).
   refreshTokens: [
     {
       token: {

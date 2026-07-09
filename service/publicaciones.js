@@ -552,7 +552,7 @@ const exportarPublicaciones = async ({ estado, tipo, search, raza, localidad }) 
     { header: "Fecha de publicación", key: "fechaCreacion", width: 20 },
     { header: "Nombre del usuario", key: "usuarioNombre", width: 25 },
     { header: "Correo del usuario", key: "usuarioCorreo", width: 32 },
-    { header: "Teléfono del usuario", key: "usuarioTelefono", width: 18 },
+    { header: "Teléfono de contacto", key: "usuarioTelefono", width: 18 },
     { header: "Fecha de registro", key: "usuarioFechaRegistro", width: 20 },
   ];
 
@@ -575,7 +575,10 @@ const exportarPublicaciones = async ({ estado, tipo, search, raza, localidad }) 
       fechaCreacion: p.fechaCreacion?.toLocaleDateString("es-AR") || "",
       usuarioNombre: u.nombre || "",
       usuarioCorreo: u.correo || "",
-      usuarioTelefono: u.telefono || "",
+      // El whatsapp cargado en la publicacion es el numero de contacto real de
+      // ese aviso y no depende de que el usuario siga existiendo; se usa como
+      // fuente principal en vez de u.telefono (que se pierde si el usuario fue borrado).
+      usuarioTelefono: p.whatsapp || u.telefono || "",
       usuarioFechaRegistro: u.fechaCreacion?.toLocaleDateString("es-AR") || "",
     });
   });
