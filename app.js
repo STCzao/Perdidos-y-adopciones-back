@@ -12,6 +12,7 @@ const userRoutes = require("./routes/usuarios");
 const publicationRoutes = require("./routes/publicaciones");
 const communityRoutes = require("./routes/comunidad");
 const colaboradoresRoutes = require("./routes/colaboradores");
+const reclamosRoutes = require("./routes/reclamos");
 const { notFound, errorHandler } = require("./middlewares/error-handler");
 
 const sanitize = (obj, req) => {
@@ -285,6 +286,7 @@ const createApp = ({ testMode = false } = {}) => {
   app.use("/api/publicaciones", publicationRoutes);
   app.use("/api/comunidad", communityRoutes);
   app.use("/api/colaboradores", colaboradoresRoutes);
+  app.use("/api/reclamos", reclamosRoutes);
 
   app.use(notFound);
   app.use(errorHandler);
