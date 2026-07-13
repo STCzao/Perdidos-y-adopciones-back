@@ -70,6 +70,15 @@ const resetPasswordValidator = [
   validarCampos,
 ];
 
+const googleLoginValidator = [
+  check("idToken", "El idToken es obligatorio").custom(esStringNoVacio),
+  check("telefono")
+    .optional()
+    .matches(/^[0-9]{7,15}$/)
+    .withMessage("El telefono debe contener entre 7 y 15 digitos numericos"),
+  validarCampos,
+];
+
 const refreshTokenValidator = [
   check("refreshToken").custom((value, { req }) => {
     const cookieToken = req.cookies?.refreshToken;
@@ -86,6 +95,7 @@ const refreshTokenValidator = [
 
 module.exports = {
   loginValidator,
+  googleLoginValidator,
   forgotPasswordValidator,
   resetPasswordValidator,
   refreshTokenValidator,

@@ -1,13 +1,21 @@
 const bcryptjs = require("bcryptjs");
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
+const { OAuth2Client } = require("google-auth-library");
 const { generarAccessToken, generarRefreshToken } = require("../helpers/generar-jwt");
 const { enviarEmail } = require("../helpers/enviar-mails");
 const { cloudinary } = require("../helpers/cloudinary");
 const logger = require("../helpers/logger");
 const AppError = require("../helpers/AppError");
 const authRepository = require("../repositories/authRepository");
+const usuariosRepository = require("../repositories/usuariosRepository");
 const { buildRefreshTokenVerifyOptions } = require("../helpers/jwt-config");
+
+let googleClient;
+const getGoogleClient = () => {
+  if (!googleClient) googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+  return googleClient;
+};
 
 const REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -20,26 +28,7 @@ const limpiarTokensExpirados = (refreshTokens = []) => {
   );
 };
 
-const login = async ({ correo, password, userAgent, ip }) => {
-  const usuario = await authRepository.findByCorreo(correo);
-
-  if (!usuario || !usuario.estado) {
-    logger.warn("Intento de login fallido - Usuario no existe o inactivo", { correo, ip });
-    throw new AppError("Correo o contraseña incorrectos", 400, {
-      correo: "Correo o contraseña incorrectos",
-      password: "Correo o contraseña incorrectos",
-    });
-  }
-
-  const validPassword = bcryptjs.compareSync(password, usuario.password);
-  if (!validPassword) {
-    logger.warn("Intento de login fallido - Contraseña incorrecta", { correo, ip });
-    throw new AppError("Correo o contraseña incorrectos", 400, {
-      correo: "Correo o contraseña incorrectos",
-      password: "Correo o contraseña incorrectos",
-    });
-  }
-
+const emitirTokens = async (usuario, { userAgent, ip }) => {
   const [accessToken, refreshToken] = await Promise.all([
     generarAccessToken(usuario.id),
     generarRefreshToken(usuario.id),
@@ -58,7 +47,102 @@ const login = async ({ correo, password, userAgent, ip }) => {
 
   await authRepository.save(usuario);
 
+  return { accessToken, refreshToken };
+};
+
+const login = async ({ correo, password, userAgent, ip }) => {
+  const usuario = await authRepository.findByCorreo(correo);
+
+  if (!usuario || !usuario.estado) {
+    logger.warn("Intento de login fallido - Usuario no existe o inactivo", { correo, ip });
+    throw new AppError("Correo o contraseña incorrectos", 400, {
+      correo: "Correo o contraseña incorrectos",
+      password: "Correo o contraseña incorrectos",
+    });
+  }
+
+  if (!usuario.password) {
+    logger.warn("Intento de login con password en cuenta de Google", { correo, ip });
+    throw new AppError("Esta cuenta se registró con Google. Iniciá sesión con Google.", 400);
+  }
+
+  const validPassword = bcryptjs.compareSync(password, usuario.password);
+  if (!validPassword) {
+    logger.warn("Intento de login fallido - Contraseña incorrecta", { correo, ip });
+    throw new AppError("Correo o contraseña incorrectos", 400, {
+      correo: "Correo o contraseña incorrectos",
+      password: "Correo o contraseña incorrectos",
+    });
+  }
+
+  const { accessToken, refreshToken } = await emitirTokens(usuario, { userAgent, ip });
+
   logger.info("Login exitoso", {
+    correo,
+    nombre: usuario.nombre,
+    ip,
+    dispositivosActivos: usuario.refreshTokens.length,
+  });
+
+  return { usuario, accessToken, refreshToken };
+};
+
+const loginConGoogle = async ({ idToken, telefono, userAgent, ip }) => {
+  let payload;
+  try {
+    const ticket = await getGoogleClient().verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    payload = ticket.getPayload();
+  } catch (error) {
+    logger.warn("idToken de Google invalido", { error: error.message, ip });
+    throw new AppError("Token de Google invalido", 401);
+  }
+
+  const { sub: googleId, email, email_verified: emailVerificado, name } = payload;
+
+  if (!emailVerificado) {
+    throw new AppError("El correo de Google no está verificado", 401);
+  }
+
+  const correo = email.trim().toLowerCase();
+  let usuario = await authRepository.findByGoogleId(googleId);
+
+  if (!usuario) {
+    usuario = await authRepository.findByCorreo(correo);
+
+    if (usuario) {
+      // Cuenta existente creada con password: se vincula porque Google ya
+      // verifico la propiedad de este correo (emailVerificado).
+      usuario.googleId = googleId;
+    } else {
+      if (!telefono) {
+        throw new AppError("El teléfono es obligatorio para completar el registro", 400, {
+          telefono: "El teléfono es obligatorio para completar el registro",
+        });
+      }
+
+      usuario = usuariosRepository.create({
+        nombre: name,
+        correo,
+        googleId,
+        telefono: telefono.trim(),
+        rol: "USER_ROLE",
+      });
+    }
+
+    await authRepository.save(usuario);
+  }
+
+  if (!usuario.estado) {
+    logger.warn("Intento de login con Google - usuario inactivo", { correo, ip });
+    throw new AppError("Usuario deshabilitado", 401);
+  }
+
+  const { accessToken, refreshToken } = await emitirTokens(usuario, { userAgent, ip });
+
+  logger.info("Login con Google exitoso", {
     correo,
     nombre: usuario.nombre,
     ip,
@@ -260,6 +344,7 @@ const generarCloudinarySignature = async () => {
 
 module.exports = {
   login,
+  loginConGoogle,
   forgotPassword,
   resetPassword,
   renovarToken,
