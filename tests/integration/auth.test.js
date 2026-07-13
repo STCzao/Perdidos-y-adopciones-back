@@ -1,6 +1,10 @@
 // Tests de integración: service/auth con Mongoose real contra mongodb-memory-server
 jest.mock("../../helpers/enviar-mails", () => ({ enviarEmail: jest.fn().mockResolvedValue(undefined) }));
 jest.mock("../../helpers/logger", () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }));
+const mockVerifyIdToken = jest.fn();
+jest.mock("google-auth-library", () => ({
+  OAuth2Client: jest.fn().mockImplementation(() => ({ verifyIdToken: mockVerifyIdToken })),
+}));
 
 const crypto = require("crypto");
 const db = require("../setup/db");
@@ -60,6 +64,74 @@ describe("service/auth — integración", () => {
       const user = await createUser({ estado: false });
       await expect(
         authService.login({ correo: user.correo, password: "password123", ip: "::1" })
+      ).rejects.toMatchObject({ statusCode: 400 });
+    });
+  });
+
+  // ─── loginConGoogle ─────────────────────────────────────────────────────────
+  describe("loginConGoogle", () => {
+    const mockPayload = (overrides = {}) => ({
+      sub: "google-sub-123",
+      email: "google-integ@test.com",
+      email_verified: true,
+      name: "Google User",
+      ...overrides,
+    });
+
+    test("crea un usuario nuevo con googleId cuando no existe cuenta previa", async () => {
+      mockVerifyIdToken.mockResolvedValue({ getPayload: () => mockPayload() });
+
+      const result = await authService.loginConGoogle({
+        idToken: "good-token",
+        telefono: "3812345678",
+        ip: "::1",
+      });
+
+      expect(result.accessToken).toBeDefined();
+      expect(result.usuario.correo).toBe("google-integ@test.com");
+
+      const creado = await Usuario.findOne({ correo: "google-integ@test.com" });
+      expect(creado.googleId).toBe("google-sub-123");
+      expect(creado.password).toBeUndefined();
+      expect(creado.telefono).toBe("3812345678");
+    });
+
+    test("vincula una cuenta existente por correo sin crear un usuario nuevo", async () => {
+      const user = await createUser({ correo: "yaexiste@test.com" });
+      mockVerifyIdToken.mockResolvedValue({
+        getPayload: () => mockPayload({ email: "yaexiste@test.com" }),
+      });
+
+      const result = await authService.loginConGoogle({ idToken: "good-token", ip: "::1" });
+
+      expect(String(result.usuario._id)).toBe(String(user._id));
+      const actualizado = await Usuario.findById(user._id);
+      expect(actualizado.googleId).toBe("google-sub-123");
+
+      const total = await Usuario.countDocuments();
+      expect(total).toBe(1);
+    });
+
+    test("loguea sin pedir telefono de nuevo si ya existe por googleId", async () => {
+      mockVerifyIdToken.mockResolvedValue({ getPayload: () => mockPayload() });
+      await authService.loginConGoogle({
+        idToken: "good-token",
+        telefono: "3812345678",
+        ip: "::1",
+      });
+
+      const result = await authService.loginConGoogle({ idToken: "good-token", ip: "::1" });
+
+      expect(result.accessToken).toBeDefined();
+      const total = await Usuario.countDocuments();
+      expect(total).toBe(1);
+    });
+
+    test("falla con 400 si es cuenta nueva y no se manda telefono", async () => {
+      mockVerifyIdToken.mockResolvedValue({ getPayload: () => mockPayload() });
+
+      await expect(
+        authService.loginConGoogle({ idToken: "good-token", ip: "::1" }),
       ).rejects.toMatchObject({ statusCode: 400 });
     });
   });

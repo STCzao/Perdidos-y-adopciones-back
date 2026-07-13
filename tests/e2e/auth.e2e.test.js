@@ -1,5 +1,9 @@
 jest.mock("../../helpers/enviar-mails", () => ({ enviarEmail: jest.fn().mockResolvedValue(undefined) }));
 jest.mock("../../helpers/logger", () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }));
+const mockVerifyIdToken = jest.fn();
+jest.mock("google-auth-library", () => ({
+  OAuth2Client: jest.fn().mockImplementation(() => ({ verifyIdToken: mockVerifyIdToken })),
+}));
 
 const request = require("supertest");
 const crypto = require("crypto");
@@ -79,6 +83,76 @@ describe("E2E: /api/auth", () => {
         .send({ correo: "inactivo@test.com", password: "password123" });
 
       expect(res.status).toBe(400);
+    });
+  });
+
+  // ─── POST /google ─────────────────────────────────────────────────────────────
+  describe("POST /api/auth/google", () => {
+    const mockPayload = (overrides = {}) => ({
+      sub: "google-sub-e2e-1",
+      email: "google-e2e@test.com",
+      email_verified: true,
+      name: "Google E2E",
+      ...overrides,
+    });
+
+    test("200 crea la cuenta y devuelve accessToken + cookie de refresh cuando manda telefono", async () => {
+      mockVerifyIdToken.mockResolvedValue({ getPayload: () => mockPayload() });
+
+      const res = await request(app)
+        .post("/api/auth/google")
+        .send({ idToken: "good-token", telefono: "3812345678" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.accessToken).toBeDefined();
+      expect(res.body.usuario.correo).toBe("google-e2e@test.com");
+      expectRefreshCookieAttributes(res.headers["set-cookie"]);
+    });
+
+    test("400 si es cuenta nueva y no manda telefono", async () => {
+      mockVerifyIdToken.mockResolvedValue({
+        getPayload: () => mockPayload({ email: "sintelefono@test.com" }),
+      });
+
+      const res = await request(app).post("/api/auth/google").send({ idToken: "good-token" });
+
+      expect(res.status).toBe(400);
+    });
+
+    test("400 con validacion si falta el idToken", async () => {
+      const res = await request(app).post("/api/auth/google").send({});
+      expect(res.status).toBe(400);
+      expect(res.body.errors).toBeDefined();
+    });
+
+    test("401 si el idToken es invalido", async () => {
+      mockVerifyIdToken.mockRejectedValue(new Error("invalid token"));
+
+      const res = await request(app).post("/api/auth/google").send({ idToken: "bad-token" });
+
+      expect(res.status).toBe(401);
+    });
+
+    test("el usuario creado por Google puede usar refresh y logout normalmente", async () => {
+      mockVerifyIdToken.mockResolvedValue({
+        getPayload: () => mockPayload({ email: "flujo-completo@test.com" }),
+      });
+
+      const google = await request(app)
+        .post("/api/auth/google")
+        .send({ idToken: "good-token", telefono: "3812345678" });
+
+      const cookie = google.headers["set-cookie"];
+      const refresh = await request(app).post("/api/auth/refresh").set("Cookie", cookie).send({});
+      expect(refresh.status).toBe(200);
+      expect(refresh.body.accessToken).toBeDefined();
+
+      const logout = await request(app)
+        .post("/api/auth/logout")
+        .set("x-token", google.body.accessToken)
+        .set("Cookie", refresh.headers["set-cookie"])
+        .send({});
+      expect(logout.status).toBe(200);
     });
   });
 

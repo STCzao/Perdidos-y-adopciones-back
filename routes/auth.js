@@ -1,6 +1,7 @@
 const { Router } = require("express");
 const {
   login,
+  googleLogin,
   forgotPassword,
   resetPassword,
   refreshToken,
@@ -10,6 +11,7 @@ const {
 } = require("../controllers/auth");
 const {
   loginValidator,
+  googleLoginValidator,
   forgotPasswordValidator,
   resetPasswordValidator,
   refreshTokenValidator,
@@ -19,6 +21,8 @@ const { validarJWT } = require("../middlewares/validar-jwt");
 const router = Router();
 
 router.post("/login", loginValidator, login);
+
+router.post("/google", googleLoginValidator, googleLogin);
 
 router.post("/forgot-password", forgotPasswordValidator, forgotPassword);
 

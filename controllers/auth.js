@@ -26,6 +26,21 @@ const login = async (req, res, next) => {
   }
 };
 
+const googleLogin = async (req, res, next) => {
+  try {
+    const result = await authService.loginConGoogle({
+      idToken: req.body.idToken,
+      telefono: req.body.telefono,
+      userAgent: req.headers["user-agent"],
+      ip: req.ip,
+    });
+    res.cookie("refreshToken", result.refreshToken, buildRefreshCookieOptions());
+    res.json({ success: true, ...omitRefreshToken(result) });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const forgotPassword = async (req, res, next) => {
   try {
     const result = await authService.forgotPassword({
@@ -105,6 +120,7 @@ const cloudinarySignature = async (req, res, next) => {
 
 module.exports = {
   login,
+  googleLogin,
   forgotPassword,
   resetPassword,
   refreshToken,

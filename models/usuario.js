@@ -23,8 +23,19 @@ const UsuarioSchema = Schema({
   },
   password: {
     type: String,
-    required: [true, "La contraseña es obligatoria"],
+    // Las cuentas creadas via Google no tienen password propio.
+    required: [
+      function () {
+        return !this.googleId;
+      },
+      "La contraseña es obligatoria",
+    ],
     minlength: [8, "La contraseña debe tener al menos 8 caracteres"],
+  },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true,
   },
   telefono: {
     type: String,

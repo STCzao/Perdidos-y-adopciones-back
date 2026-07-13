@@ -10,6 +10,10 @@ jest.mock("crypto", () => ({
 }));
 jest.mock("../../../helpers/generar-jwt");
 jest.mock("../../../helpers/enviar-mails");
+const mockVerifyIdToken = jest.fn();
+jest.mock("google-auth-library", () => ({
+  OAuth2Client: jest.fn().mockImplementation(() => ({ verifyIdToken: mockVerifyIdToken })),
+}));
 jest.mock("../../../helpers/cloudinary", () => ({
   cloudinary: {
     utils: {
@@ -61,6 +65,119 @@ describe("service/auth", () => {
     expect(result.accessToken).toBe("access-token");
     expect(result.refreshToken).toBe("refresh-token");
     expect(mockUser.save).toHaveBeenCalled();
+  });
+
+  test("login lanza 400 si la cuenta no tiene password (se registro con Google)", async () => {
+    const mockUser = makeMockUser({ password: undefined, googleId: "google-sub-123" });
+    Usuario.findOne.mockResolvedValue(mockUser);
+
+    const err = await authService
+      .login({ correo: "x@x.com", password: "pass", ip: "::1" })
+      .catch((e) => e);
+
+    expect(err).toBeInstanceOf(AppError);
+    expect(err.statusCode).toBe(400);
+    expect(bcryptjs.compareSync).not.toHaveBeenCalled();
+  });
+
+  describe("loginConGoogle", () => {
+    beforeEach(() => {
+      generarAccessToken.mockResolvedValue("access-token");
+      generarRefreshToken.mockResolvedValue("refresh-token");
+    });
+
+    const mockPayload = (overrides = {}) => ({
+      sub: "google-sub-123",
+      email: "google@test.com",
+      email_verified: true,
+      name: "Google User",
+      ...overrides,
+    });
+
+    test("lanza 401 si el idToken es invalido", async () => {
+      mockVerifyIdToken.mockRejectedValue(new Error("invalid token"));
+
+      const err = await authService
+        .loginConGoogle({ idToken: "bad-token", ip: "::1" })
+        .catch((e) => e);
+
+      expect(err).toBeInstanceOf(AppError);
+      expect(err.statusCode).toBe(401);
+    });
+
+    test("lanza 401 si el correo de Google no esta verificado", async () => {
+      mockVerifyIdToken.mockResolvedValue({
+        getPayload: () => mockPayload({ email_verified: false }),
+      });
+
+      const err = await authService
+        .loginConGoogle({ idToken: "good-token", ip: "::1" })
+        .catch((e) => e);
+
+      expect(err).toBeInstanceOf(AppError);
+      expect(err.statusCode).toBe(401);
+    });
+
+    test("loguea directo si ya existe un usuario con ese googleId", async () => {
+      mockVerifyIdToken.mockResolvedValue({ getPayload: () => mockPayload() });
+      const mockUser = makeMockUser({ googleId: "google-sub-123" });
+      Usuario.findOne.mockResolvedValueOnce(mockUser); // findByGoogleId
+
+      const result = await authService.loginConGoogle({ idToken: "good-token", ip: "::1" });
+
+      expect(result.accessToken).toBe("access-token");
+      expect(mockUser.save).toHaveBeenCalled();
+    });
+
+    test("vincula una cuenta existente encontrada por correo (sin googleId)", async () => {
+      mockVerifyIdToken.mockResolvedValue({ getPayload: () => mockPayload() });
+      const mockUser = makeMockUser({ correo: "google@test.com", googleId: undefined });
+      Usuario.findOne
+        .mockResolvedValueOnce(null) // findByGoogleId
+        .mockResolvedValueOnce(mockUser); // findByCorreo
+
+      const result = await authService.loginConGoogle({ idToken: "good-token", ip: "::1" });
+
+      expect(mockUser.googleId).toBe("google-sub-123");
+      expect(mockUser.save).toHaveBeenCalled();
+      expect(result.accessToken).toBe("access-token");
+    });
+
+    test("lanza 400 si es un usuario nuevo y no manda telefono", async () => {
+      mockVerifyIdToken.mockResolvedValue({ getPayload: () => mockPayload() });
+      Usuario.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+
+      const err = await authService
+        .loginConGoogle({ idToken: "good-token", ip: "::1" })
+        .catch((e) => e);
+
+      expect(err).toBeInstanceOf(AppError);
+      expect(err.statusCode).toBe(400);
+    });
+
+    test("crea un usuario nuevo si manda telefono", async () => {
+      mockVerifyIdToken.mockResolvedValue({ getPayload: () => mockPayload() });
+      Usuario.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+      let datosCreados;
+      let creado;
+      Usuario.mockImplementation((data) => {
+        datosCreados = data;
+        creado = makeMockUser({ ...data, refreshTokens: [] });
+        return creado;
+      });
+
+      const result = await authService.loginConGoogle({
+        idToken: "good-token",
+        telefono: "3812345678",
+        ip: "::1",
+      });
+
+      expect(datosCreados.correo).toBe("google@test.com");
+      expect(datosCreados.googleId).toBe("google-sub-123");
+      expect(datosCreados.telefono).toBe("3812345678");
+      expect(datosCreados.password).toBeUndefined();
+      expect(result.accessToken).toBe("access-token");
+    });
   });
 
   test("forgotPassword envia email y guarda resetToken", async () => {
