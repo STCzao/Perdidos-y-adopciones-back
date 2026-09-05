@@ -3,9 +3,12 @@ const logger = require("../helpers/logger");
 const AppError = require("../helpers/AppError");
 const { eliminarImagen } = require("../helpers/cloudinary");
 const { normalizarTexto } = require("../helpers/normalizar-texto");
+const { geocodificarDireccion } = require("../helpers/geocoding");
+const { coordenadasAPunto, generarUbicacionPublica } = require("../helpers/geo");
 const publicacionesRepository = require("../repositories/publicacionesRepository");
 
 const escaparRegex = (texto) => texto.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const esStringNoVacio = (value) => typeof value === "string" && value.trim().length > 0;
 const TAMANIO_KEY = "tama\u00f1o";
 
 const ESTADOS_PUBLICOS = [
@@ -41,6 +44,7 @@ const CAMPOS_COMPARTIDOS = [
   "afinidadanimales",
   "energia",
   "castrado",
+  "ubicacion",
 ];
 
 const normalizarImagenes = ({ imgs, img } = {}) => {
@@ -69,7 +73,30 @@ const construirRegexBusqueda = (search) => {
   return { $regex: escaparRegex(termino), $options: "i" };
 };
 
-const construirDatosPublicacion = ({ datos, usuarioId, tipo = datos.tipo, estado, extra = {} }) => {
+// Resuelve la ubicación exacta de una publicación PERDIDO/ENCONTRADO y calcula el
+// pin público desplazado a partir de ella. Prioridad: coordenadas GPS enviadas por
+// el cliente > geocoding de `lugar` > ubicación ya existente (ej. al corregir el
+// tipo de una publicación sin cambiar su dirección).
+const resolverUbicacion = async ({ lat, lng, lugar, localidad, ubicacionExistente }) => {
+  const tieneCoordenadas = lat !== undefined && lat !== null && lng !== undefined && lng !== null;
+
+  let punto;
+  if (tieneCoordenadas) {
+    punto = coordenadasAPunto({ lat, lng });
+  } else if (esStringNoVacio(lugar)) {
+    const contexto = [localidad, "Tucumán", "Argentina"].filter(Boolean).join(", ");
+    const geocodificado = await geocodificarDireccion({ direccion: lugar, contexto });
+    punto = coordenadasAPunto({ lat: geocodificado.lat, lng: geocodificado.lng });
+  } else if (ubicacionExistente) {
+    punto = ubicacionExistente;
+  } else {
+    throw new AppError("Debe indicar la ubicación por GPS (lat/lng) o cargar una dirección", 400);
+  }
+
+  return { ubicacion: punto, ubicacionPublica: generarUbicacionPublica(punto) };
+};
+
+const construirDatosPublicacion = async ({ datos, usuarioId, tipo = datos.tipo, estado, extra = {} }) => {
   const tipoNormalizado = normalizarTexto(tipo);
   const datosNormalizados = {
     tipo: tipoNormalizado,
@@ -93,6 +120,16 @@ const construirDatosPublicacion = ({ datos, usuarioId, tipo = datos.tipo, estado
     datosNormalizados.localidad = normalizarTexto(datos.localidad);
     datosNormalizados.lugar = normalizarTexto(datos.lugar);
     datosNormalizados.fecha = datos.fecha;
+
+    const { ubicacion, ubicacionPublica } = await resolverUbicacion({
+      lat: datos.lat,
+      lng: datos.lng,
+      lugar: datosNormalizados.lugar,
+      localidad: datosNormalizados.localidad,
+      ubicacionExistente: datos.ubicacion,
+    });
+    datosNormalizados.ubicacion = ubicacion;
+    datosNormalizados.ubicacionPublica = ubicacionPublica;
   }
 
   if (tipoNormalizado === "ADOPCION") {
@@ -158,6 +195,7 @@ const getPublicaciones = async ({
     publicacionesRepository.countDocuments(query),
     publicacionesRepository.find({
       filter: query,
+      select: "-ubicacion",
       populate: { path: "usuario", select: "nombre" },
       sort: { fechaCreacion: -1 },
       skip,
@@ -217,7 +255,7 @@ const getPublicacion = async ({ id }) => {
       estado: { $ne: "INACTIVO" },
     },
     populate: { path: "usuario", select: "nombre" },
-    select: "-whatsapp",
+    select: "-whatsapp -ubicacion",
   });
 
   if (!publicacion) {
@@ -230,7 +268,7 @@ const getPublicacion = async ({ id }) => {
 const crearPublicacion = async ({ body, usuarioId, correo, ip }) => {
   const { estado, usuario, ...datos } = body;
   const tipoNormalizado = normalizarTexto(datos.tipo);
-  const datosNormalizados = construirDatosPublicacion({ datos, usuarioId });
+  const datosNormalizados = await construirDatosPublicacion({ datos, usuarioId });
 
   const publicacion = publicacionesRepository.create(datosNormalizados);
   const publicacionDB = await publicacionesRepository.save(publicacion);
@@ -285,6 +323,9 @@ const actualizarPublicacion = async ({ id, body, usuarioActual }) => {
         datosNormalizados.imgs = nuevasImagenes;
         datosNormalizados.img = undefined;
       }
+    } else if (key === "lat" || key === "lng") {
+      // Se procesan aparte más abajo — no son campos del schema, `ubicacion`/
+      // `ubicacionPublica` sí lo son.
     } else if (typeof resto[key] === "string" && resto[key].trim() !== "") {
       datosNormalizados[key] = normalizarTexto(resto[key]);
     } else {
@@ -293,6 +334,21 @@ const actualizarPublicacion = async ({ id, body, usuarioActual }) => {
   });
 
   const tipoExistente = publicacionExistente.tipo;
+  const esTipoConUbicacion = tipoExistente === "PERDIDO" || tipoExistente === "ENCONTRADO";
+  const pidioNuevaUbicacion =
+    resto.lat !== undefined || resto.lng !== undefined || resto.lugar !== undefined;
+
+  if (esTipoConUbicacion && pidioNuevaUbicacion) {
+    const { ubicacion, ubicacionPublica } = await resolverUbicacion({
+      lat: resto.lat,
+      lng: resto.lng,
+      lugar: datosNormalizados.lugar,
+      localidad: datosNormalizados.localidad ?? publicacionExistente.localidad,
+    });
+    datosNormalizados.ubicacion = ubicacion;
+    datosNormalizados.ubicacionPublica = ubicacionPublica;
+  }
+
   if (tipoExistente === "ADOPCION") {
     delete datosNormalizados.localidad;
     delete datosNormalizados.lugar;
@@ -341,7 +397,7 @@ const corregirTipoPublicacion = async ({ id, body, usuarioActual, correo, ip }) 
   }
 
   const datosBase = extraerBasePublicacion(publicacionExistente);
-  const datosNuevaPublicacion = construirDatosPublicacion({
+  const datosNuevaPublicacion = await construirDatosPublicacion({
     datos: {
       ...datosBase,
       ...resto,
@@ -455,12 +511,61 @@ const getContacto = async ({ id }) => {
   return { whatsapp: publicacion.whatsapp };
 };
 
+const getUbicacionExacta = async ({ id }) => {
+  const publicacion = await publicacionesRepository.findOne({
+    filter: {
+      _id: id,
+      estado: { $ne: "INACTIVO" },
+    },
+    select: "ubicacion",
+  });
+
+  if (!publicacion || !publicacion.ubicacion) {
+    throw new AppError("Publicacion no encontrada o sin ubicación cargada", 404);
+  }
+
+  return { ubicacion: publicacion.ubicacion };
+};
+
+// Carga manual de moderación: para publicaciones que el geocoding automático no
+// pudo resolver (o resolvió mal), un moderador fija lat/lng directo — sin pasar
+// por Nominatim — a partir de una ubicación que verificó por su cuenta.
+const establecerUbicacionManual = async ({ id, lat, lng, correo, ip }) => {
+  const publicacion = await publicacionesRepository.findById(id);
+
+  if (!publicacion) {
+    throw new AppError("Publicacion no encontrada", 404);
+  }
+
+  if (!TIPOS_CON_UBICACION.has(publicacion.tipo)) {
+    throw new AppError("Esta publicación no admite ubicación geolocalizada", 400);
+  }
+
+  const punto = coordenadasAPunto({ lat, lng });
+  const ubicacionPublica = generarUbicacionPublica(punto);
+
+  const publicacionActualizada = await publicacionesRepository.findByIdAndUpdate(
+    id,
+    { ubicacion: punto, ubicacionPublica },
+    { new: true, populate: { path: "usuario", select: "nombre" } },
+  );
+
+  logger.info("Ubicación cargada manualmente por moderación", {
+    publicacionId: id,
+    moderador: correo,
+    ip,
+  });
+
+  return { publicacion: publicacionActualizada };
+};
+
 const getPublicacionesAdmin = async ({
   estado,
   tipo,
   search,
   raza,
   localidad,
+  sinUbicacion,
   page = 1,
   limit = 12,
   sortBy = "fechaCreacion",
@@ -475,6 +580,13 @@ const getPublicacionesAdmin = async ({
   if (tipo) query.tipo = normalizarTexto(tipo);
   if (raza) query.raza = normalizarTexto(raza);
   if (localidad) query.localidad = normalizarTexto(localidad);
+
+  // Solo PERDIDO/ENCONTRADO admiten ubicación — sin esto, un ADOPCION (que
+  // nunca tiene `ubicacion`) contaminaría el filtro de "pendientes de cargar".
+  if (sinUbicacion === "true") {
+    query.ubicacion = { $exists: false };
+    if (!tipo) query.tipo = { $in: Array.from(TIPOS_CON_UBICACION) };
+  }
 
   const regex = construirRegexBusqueda(search);
   if (regex) {
@@ -603,6 +715,8 @@ module.exports = {
   cambiarEstadoPublicacion,
   eliminarPublicacion,
   getContacto,
+  getUbicacionExacta,
+  establecerUbicacionManual,
   getPublicacionesAdmin,
   exportarPublicaciones,
 };
