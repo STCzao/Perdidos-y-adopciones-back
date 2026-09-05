@@ -251,6 +251,26 @@ describe("service/publicaciones", () => {
     expect(result.ubicacion).toEqual(ubicacion);
   });
 
+  test("getPublicacionesPendientesUbicacion filtra por tipos con ubicacion y ausencia de ubicacion, sin exponer correo", async () => {
+    const selectMock = jest.fn().mockReturnThis();
+    Publicacion.countDocuments.mockResolvedValue(0);
+    Publicacion.find.mockReturnValue({
+      select: selectMock,
+      sort: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockResolvedValue([]),
+    });
+
+    await publicacionService.getPublicacionesPendientesUbicacion({});
+
+    const query = Publicacion.countDocuments.mock.calls[0][0];
+    expect(query.tipo).toEqual({ $in: ["PERDIDO", "ENCONTRADO"] });
+    expect(query.ubicacion).toEqual({ $exists: false });
+
+    // No hay populate de `usuario` en ningun punto: este listado no expone correo.
+    expect(selectMock).toHaveBeenCalledWith("tipo lugar localidad fechaCreacion");
+  });
+
   test("establecerUbicacionManual rechaza publicaciones sin ubicacion (ADOPCION)", async () => {
     Publicacion.findById.mockResolvedValue(makeMockPub({ tipo: "ADOPCION" }));
 

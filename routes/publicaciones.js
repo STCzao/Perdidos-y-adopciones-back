@@ -12,6 +12,7 @@ const {
   obtenerContactoPublicacion,
   obtenerUbicacionExactaPublicacion,
   publicacionesUbicacionManualPatch,
+  publicacionesPendientesUbicacionGet,
   publicacionesAdminGet,
   publicacionesExportar,
 } = require("../controllers/publicaciones");
@@ -37,6 +38,12 @@ router.get("/razas", (req, res) =>
 router.get("/admin/exportar", [validarJWT, esAdminRole], publicacionesExportar);
 
 router.get("/admin/todas", [validarJWT, esAdminRole], publicacionesAdminGet);
+
+router.get(
+  "/admin/pendientes-ubicacion",
+  [validarJWT, esModeradorOAdmin],
+  publicacionesPendientesUbicacionGet,
+);
 
 router.get("/usuario/:id", [validarJWT, ...publicacionIdValidator], publicacionesUsuarioGet);
 

@@ -120,6 +120,15 @@ const publicacionesUbicacionManualPatch = async (req, res, next) => {
   }
 };
 
+const publicacionesPendientesUbicacionGet = async (req, res, next) => {
+  try {
+    const result = await publicacionService.getPublicacionesPendientesUbicacion(req.query);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const publicacionesAdminGet = async (req, res, next) => {
   try {
     const result = await publicacionService.getPublicacionesAdmin(req.query);
@@ -169,6 +178,7 @@ module.exports = {
   obtenerContactoPublicacion,
   obtenerUbicacionExactaPublicacion,
   publicacionesUbicacionManualPatch,
+  publicacionesPendientesUbicacionGet,
   publicacionesAdminGet,
   publicacionesExportar,
 };
