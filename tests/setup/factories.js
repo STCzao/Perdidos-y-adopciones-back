@@ -46,6 +46,8 @@ const PUBLICACION_BASE = {
   edad: "ADULTO",
   localidad: "SAN MIGUEL DE TUCUMAN",
   lugar: "PARQUE 9 DE JULIO",
+  ubicacion: { type: "Point", coordinates: [-65.2226, -26.8241] },
+  ubicacionPublica: { type: "Point", coordinates: [-65.2224, -26.8239] },
   fecha: "2026-03-19",
   whatsapp: "3812345678901",
   imgs: ["https://res.cloudinary.com/demo/image/upload/test.jpg"],

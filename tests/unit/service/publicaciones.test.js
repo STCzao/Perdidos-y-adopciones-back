@@ -8,6 +8,12 @@ jest.mock("../../../helpers/logger", () => ({
   error: jest.fn(),
   debug: jest.fn(),
 }));
+jest.mock("../../../helpers/geocoding", () => ({
+  geocodificarDireccion: jest
+    .fn()
+    .mockResolvedValue({ lat: -26.8241, lng: -65.2226, clase: "amenity", tipo: "park" }),
+  esResultadoImpreciso: jest.fn().mockReturnValue(false),
+}));
 
 const publicacionService = require("../../../service/publicaciones");
 const Publicacion = require("../../../models/publicacion");
@@ -39,6 +45,7 @@ describe("service/publicaciones", () => {
     Publicacion.countDocuments.mockResolvedValue(0);
     Publicacion.find.mockReturnValue({
       populate: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
       sort: jest.fn().mockReturnThis(),
       skip: jest.fn().mockReturnThis(),
       limit: jest.fn().mockResolvedValue([]),
@@ -224,5 +231,101 @@ describe("service/publicaciones", () => {
     expect(eliminarImagen).toHaveBeenCalledTimes(2);
     expect(eliminarImagen).toHaveBeenCalledWith(pub.imgs[0]);
     expect(eliminarImagen).toHaveBeenCalledWith(pub.imgs[1]);
+  });
+
+  test("getUbicacionExacta lanza 404 si la publicacion no tiene ubicacion cargada", async () => {
+    Publicacion.findOne.mockReturnValue({ select: jest.fn().mockResolvedValue(null) });
+
+    const err = await publicacionService.getUbicacionExacta({ id: "pub-id" }).catch((e) => e);
+
+    expect(err).toBeInstanceOf(AppError);
+    expect(err.statusCode).toBe(404);
+  });
+
+  test("getUbicacionExacta devuelve la ubicacion exacta guardada", async () => {
+    const ubicacion = { type: "Point", coordinates: [-65.2226, -26.8241] };
+    Publicacion.findOne.mockReturnValue({ select: jest.fn().mockResolvedValue({ ubicacion }) });
+
+    const result = await publicacionService.getUbicacionExacta({ id: "pub-id" });
+
+    expect(result.ubicacion).toEqual(ubicacion);
+  });
+
+  test("establecerUbicacionManual rechaza publicaciones sin ubicacion (ADOPCION)", async () => {
+    Publicacion.findById.mockResolvedValue(makeMockPub({ tipo: "ADOPCION" }));
+
+    const err = await publicacionService
+      .establecerUbicacionManual({ id: "pub-id", lat: -26.82, lng: -65.22, correo: "mod@test.com", ip: "::1" })
+      .catch((e) => e);
+
+    expect(err).toBeInstanceOf(AppError);
+    expect(err.statusCode).toBe(400);
+  });
+
+  test("getPublicacionesAdmin con sinUbicacion=true filtra por ausencia de ubicacion y tipos con ubicacion", async () => {
+    Publicacion.countDocuments.mockResolvedValue(0);
+    Publicacion.find.mockReturnValue({
+      populate: jest.fn().mockReturnThis(),
+      sort: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockResolvedValue([]),
+    });
+
+    await publicacionService.getPublicacionesAdmin({ sinUbicacion: "true" });
+
+    const query = Publicacion.countDocuments.mock.calls[0][0];
+    expect(query.ubicacion).toEqual({ $exists: false });
+    expect(query.tipo).toEqual({ $in: ["PERDIDO", "ENCONTRADO"] });
+  });
+
+  test("getPublicacionesAdmin con sinUbicacion=true y tipo explicito no pisa el tipo pedido", async () => {
+    Publicacion.countDocuments.mockResolvedValue(0);
+    Publicacion.find.mockReturnValue({
+      populate: jest.fn().mockReturnThis(),
+      sort: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockResolvedValue([]),
+    });
+
+    await publicacionService.getPublicacionesAdmin({ sinUbicacion: "true", tipo: "PERDIDO" });
+
+    const query = Publicacion.countDocuments.mock.calls[0][0];
+    expect(query.tipo).toBe("PERDIDO");
+  });
+
+  test("getPublicacionesAdmin sin sinUbicacion no agrega filtro de ubicacion", async () => {
+    Publicacion.countDocuments.mockResolvedValue(0);
+    Publicacion.find.mockReturnValue({
+      populate: jest.fn().mockReturnThis(),
+      sort: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockResolvedValue([]),
+    });
+
+    await publicacionService.getPublicacionesAdmin({});
+
+    const query = Publicacion.countDocuments.mock.calls[0][0];
+    expect(query.ubicacion).toBeUndefined();
+  });
+
+  test("establecerUbicacionManual guarda ubicacion y ubicacionPublica sin llamar al geocoding", async () => {
+    const { geocodificarDireccion } = require("../../../helpers/geocoding");
+    Publicacion.findById.mockResolvedValue(makeMockPub({ tipo: "PERDIDO" }));
+    Publicacion.findByIdAndUpdate.mockReturnValue({
+      populate: jest.fn().mockResolvedValue(makeMockPub({ tipo: "PERDIDO" })),
+    });
+
+    await publicacionService.establecerUbicacionManual({
+      id: "pub-id",
+      lat: -26.82,
+      lng: -65.22,
+      correo: "mod@test.com",
+      ip: "::1",
+    });
+
+    expect(geocodificarDireccion).not.toHaveBeenCalled();
+    const [, datos] = Publicacion.findByIdAndUpdate.mock.calls[0];
+    expect(datos.ubicacion).toEqual({ type: "Point", coordinates: [-65.22, -26.82] });
+    expect(datos.ubicacionPublica.type).toBe("Point");
   });
 });
