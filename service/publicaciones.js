@@ -559,6 +559,34 @@ const establecerUbicacionManual = async ({ id, lat, lng, correo, ip }) => {
   return { publicacion: publicacionActualizada };
 };
 
+// Listado acotado para moderación: a diferencia de getPublicacionesAdmin (solo
+// ADMIN_ROLE), esta la puede usar también un moderador — por eso expone solo lo
+// necesario para decidir a qué publicación cargarle la ubicación a mano (nada de
+// correo ni el resto de los datos del listado admin completo).
+const getPublicacionesPendientesUbicacion = async ({ page = 1, limit = 20 } = {}) => {
+  const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+  const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 50);
+  const skip = (pageNum - 1) * limitNum;
+
+  const query = {
+    tipo: { $in: Array.from(TIPOS_CON_UBICACION) },
+    ubicacion: { $exists: false },
+  };
+
+  const [total, publicaciones] = await Promise.all([
+    publicacionesRepository.countDocuments(query),
+    publicacionesRepository.find({
+      filter: query,
+      select: "tipo lugar localidad fechaCreacion",
+      sort: { fechaCreacion: -1 },
+      skip,
+      limit: limitNum,
+    }),
+  ]);
+
+  return { total, page: pageNum, totalPages: Math.ceil(total / limitNum), publicaciones };
+};
+
 const getPublicacionesAdmin = async ({
   estado,
   tipo,
@@ -717,6 +745,7 @@ module.exports = {
   getContacto,
   getUbicacionExacta,
   establecerUbicacionManual,
+  getPublicacionesPendientesUbicacion,
   getPublicacionesAdmin,
   exportarPublicaciones,
 };
