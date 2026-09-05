@@ -96,6 +96,30 @@ const obtenerContactoPublicacion = async (req, res, next) => {
   }
 };
 
+const obtenerUbicacionExactaPublicacion = async (req, res, next) => {
+  try {
+    const result = await publicacionService.getUbicacionExacta({ id: req.params.id });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const publicacionesUbicacionManualPatch = async (req, res, next) => {
+  try {
+    const result = await publicacionService.establecerUbicacionManual({
+      id: req.params.id,
+      lat: req.body.lat,
+      lng: req.body.lng,
+      correo: req.usuario.correo,
+      ip: req.ip,
+    });
+    res.json({ success: true, msg: "Ubicación actualizada exitosamente", ...result });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const publicacionesAdminGet = async (req, res, next) => {
   try {
     const result = await publicacionService.getPublicacionesAdmin(req.query);
@@ -143,6 +167,8 @@ module.exports = {
   publicacionesEstadoPut,
   publicacionesDelete,
   obtenerContactoPublicacion,
+  obtenerUbicacionExactaPublicacion,
+  publicacionesUbicacionManualPatch,
   publicacionesAdminGet,
   publicacionesExportar,
 };
