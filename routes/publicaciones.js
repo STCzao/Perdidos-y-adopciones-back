@@ -10,16 +10,13 @@ const {
   publicacionesEstadoPut,
   publicacionesDelete,
   obtenerContactoPublicacion,
-  obtenerUbicacionExactaPublicacion,
-  publicacionesUbicacionManualPatch,
   publicacionesAdminGet,
   publicacionesExportar,
 } = require("../controllers/publicaciones");
 const { validarJWT } = require("../middlewares/validar-jwt");
-const { esAdminRole, esModeradorOAdmin } = require("../middlewares/validar-roles");
+const { esAdminRole } = require("../middlewares/validar-roles");
 const {
   publicacionIdValidator,
-  ubicacionManualValidator,
   createPublicacionValidator,
   estadoPublicacionValidator,
   updatePublicacionValidator,
@@ -41,18 +38,6 @@ router.get("/admin/todas", [validarJWT, esAdminRole], publicacionesAdminGet);
 router.get("/usuario/:id", [validarJWT, ...publicacionIdValidator], publicacionesUsuarioGet);
 
 router.get("/contacto/:id", [validarJWT, ...publicacionIdValidator], obtenerContactoPublicacion);
-
-router.get(
-  "/:id/ubicacion-exacta",
-  [validarJWT, esModeradorOAdmin, ...publicacionIdValidator],
-  obtenerUbicacionExactaPublicacion,
-);
-
-router.patch(
-  "/:id/ubicacion",
-  [validarJWT, esModeradorOAdmin, ...ubicacionManualValidator],
-  publicacionesUbicacionManualPatch,
-);
 
 router.get("/:id", publicacionIdValidator, publicacionGet);
 

@@ -2,14 +2,6 @@ const { Schema, model } = require("mongoose");
 const { LOCALIDADES_TUCUMAN } = require("../helpers/localidades");
 const { RAZAS } = require("../helpers/razas");
 
-const PuntoSchema = new Schema(
-  {
-    type: { type: String, enum: ["Point"], default: "Point" },
-    coordinates: { type: [Number], required: true },
-  },
-  { _id: false },
-);
-
 const PublicacionSchema = Schema({
   tipo: {
     type: String,
@@ -61,22 +53,6 @@ const PublicacionSchema = Schema({
       return this.tipo === "PERDIDO" || this.tipo === "ENCONTRADO";
     },
     maxlength: [80, "El lugar no puede tener más de 80 caracteres"],
-  },
-  // Ubicación exacta (GPS o geocoding de `lugar`). Nunca se expone en endpoints
-  // públicos — solo accesible vía el endpoint de moderación.
-  ubicacion: {
-    type: PuntoSchema,
-    required: function () {
-      return this.tipo === "PERDIDO" || this.tipo === "ENCONTRADO";
-    },
-  },
-  // Ubicación desplazada aleatoriamente 100-200m respecto de `ubicacion`, para
-  // no exponer la dirección exacta de quien reporta. Es la que consume el mapa público.
-  ubicacionPublica: {
-    type: PuntoSchema,
-    required: function () {
-      return this.tipo === "PERDIDO" || this.tipo === "ENCONTRADO";
-    },
   },
   fecha: {
     type: String,
@@ -203,7 +179,6 @@ PublicacionSchema.index({ tipo: 1, estado: 1 });
 PublicacionSchema.index({ raza: "text", localidad: "text", lugar: "text", detalles: "text" });
 PublicacionSchema.index({ usuario: 1 });
 PublicacionSchema.index({ fechaCreacion: -1 });
-PublicacionSchema.index({ ubicacionPublica: "2dsphere" });
 
 PublicacionSchema.methods.toJSON = function () {
   const { __v, ...publicacion } = this.toObject();

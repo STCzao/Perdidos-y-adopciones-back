@@ -1,10 +1,4 @@
 jest.mock("../../helpers/logger", () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }));
-jest.mock("../../helpers/geocoding", () => ({
-  geocodificarDireccion: jest
-    .fn()
-    .mockResolvedValue({ lat: -26.8241, lng: -65.2226, clase: "amenity", tipo: "park" }),
-  esResultadoImpreciso: jest.fn().mockReturnValue(false),
-}));
 
 const db = require("../setup/db");
 const { createUser, createAdmin, createPublicacion } = require("../setup/factories");

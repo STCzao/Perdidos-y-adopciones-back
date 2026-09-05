@@ -1,11 +1,5 @@
 jest.mock("../../helpers/enviar-mails", () => ({ enviarEmail: jest.fn().mockResolvedValue(undefined) }));
 jest.mock("../../helpers/logger", () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }));
-jest.mock("../../helpers/geocoding", () => ({
-  geocodificarDireccion: jest
-    .fn()
-    .mockResolvedValue({ lat: -26.8241, lng: -65.2226, clase: "amenity", tipo: "park" }),
-  esResultadoImpreciso: jest.fn().mockReturnValue(false),
-}));
 
 const request = require("supertest");
 const db = require("../setup/db");
@@ -147,7 +141,7 @@ describe("E2E: /api/publicaciones", () => {
 
   // ─── GET /:id — Publicación individual ───────────────────────────────────────
   describe("GET /api/publicaciones/:id", () => {
-    test("200 retorna publicación activa sin whatsapp ni ubicación exacta", async () => {
+    test("200 retorna publicación activa sin whatsapp", async () => {
       const user = await createUser();
       const pub = await createPublicacion(user._id, { estado: "SE BUSCA" });
 
@@ -155,8 +149,6 @@ describe("E2E: /api/publicaciones", () => {
       expect(res.status).toBe(200);
       expect(res.body.publicacion).toBeDefined();
       expect(res.body.publicacion.whatsapp).toBeUndefined();
-      expect(res.body.publicacion.ubicacion).toBeUndefined();
-      expect(res.body.publicacion.ubicacionPublica).toBeDefined();
     });
 
     test("400 con un id que no es MongoId", async () => {
@@ -186,58 +178,6 @@ describe("E2E: /api/publicaciones", () => {
       const pub = await createPublicacion(user._id, { estado: "SE BUSCA" });
 
       const res = await request(app).get(`/api/publicaciones/contacto/${pub._id}`);
-      expect(res.status).toBe(401);
-    });
-  });
-
-  // ─── GET /:id/ubicacion-exacta ─────────────────────────────────────────────────
-  describe("GET /api/publicaciones/:id/ubicacion-exacta", () => {
-    test("200 retorna la ubicación exacta para un moderador", async () => {
-      await createUser({ correo: "mod@test.com", rawPassword: "password123", rol: "MODERADOR_ROLE" });
-      const user = await createUser();
-      const pub = await createPublicacion(user._id, { estado: "SE BUSCA" });
-      const token = await loginAs("mod@test.com");
-
-      const res = await request(app)
-        .get(`/api/publicaciones/${pub._id}/ubicacion-exacta`)
-        .set("x-token", token);
-
-      expect(res.status).toBe(200);
-      expect(res.body.ubicacion).toBeDefined();
-      expect(res.body.ubicacion.type).toBe("Point");
-    });
-
-    test("200 retorna la ubicación exacta para un admin", async () => {
-      const admin = await createAdmin({ correo: "admin-ubi@test.com", rawPassword: "password123" });
-      const pub = await createPublicacion(admin._id, { estado: "SE BUSCA" });
-      const token = await loginAs("admin-ubi@test.com");
-
-      const res = await request(app)
-        .get(`/api/publicaciones/${pub._id}/ubicacion-exacta`)
-        .set("x-token", token);
-
-      expect(res.status).toBe(200);
-      expect(res.body.ubicacion).toBeDefined();
-    });
-
-    test("403 para un usuario sin rol moderador/admin", async () => {
-      await createUser({ correo: "user-ubi@test.com", rawPassword: "password123" });
-      const user = await createUser();
-      const pub = await createPublicacion(user._id, { estado: "SE BUSCA" });
-      const token = await loginAs("user-ubi@test.com");
-
-      const res = await request(app)
-        .get(`/api/publicaciones/${pub._id}/ubicacion-exacta`)
-        .set("x-token", token);
-
-      expect(res.status).toBe(403);
-    });
-
-    test("401 sin token de autenticación", async () => {
-      const user = await createUser();
-      const pub = await createPublicacion(user._id, { estado: "SE BUSCA" });
-
-      const res = await request(app).get(`/api/publicaciones/${pub._id}/ubicacion-exacta`);
       expect(res.status).toBe(401);
     });
   });

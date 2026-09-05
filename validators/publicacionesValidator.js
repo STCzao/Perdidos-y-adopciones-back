@@ -167,31 +167,11 @@ const ubicacionValidators = (optional = false) => [
     .optional()
     .isIn(LOCALIDADES_TUCUMAN)
     .withMessage("La localidad debe ser una opción válida de Tucumán"),
-  check("lat")
-    .optional({ nullable: true })
-    .isFloat({ min: -90, max: 90 })
-    .withMessage("La latitud no es válida")
-    .toFloat(),
-  check("lng")
-    .optional({ nullable: true })
-    .isFloat({ min: -180, max: 180 })
-    .withMessage("La longitud no es válida")
-    .toFloat(),
-  check("lat").custom((value, { req }) => {
-    const tieneLat = value !== undefined && value !== null;
-    const tieneLng = req.body.lng !== undefined && req.body.lng !== null;
-    if (tieneLat !== tieneLng) {
-      throw new Error("La latitud y la longitud deben enviarse juntas");
-    }
-    return true;
-  }),
   check("lugar")
     .if((_value, { req }) => !optional || req.body.lugar !== undefined)
     .custom((value, { req }) => {
-      const esTipoConUbicacion = ["PERDIDO", "ENCONTRADO"].includes(req.body.tipo);
-      const tieneCoordenadas = req.body.lat !== undefined && req.body.lat !== null;
-      if (!optional && esTipoConUbicacion && !tieneCoordenadas && !esStringNoVacio(value)) {
-        throw new Error("Debe indicar la ubicación por GPS (lat/lng) o cargar una dirección en 'lugar'");
+      if (!optional && ["PERDIDO", "ENCONTRADO"].includes(req.body.tipo) && !esStringNoVacio(value)) {
+        throw new Error("El lugar es obligatorio para perdidos y encontrados");
       }
       return true;
     }),
@@ -256,23 +236,6 @@ const adopcionValidators = (optional = false) => [
 ];
 
 const publicacionIdValidator = [check("id", "No es un ID válido").isMongoId(), validarCampos];
-
-const ubicacionManualValidator = [
-  check("id", "No es un ID válido").isMongoId(),
-  check("lat", "La latitud es obligatoria")
-    .exists({ checkNull: true })
-    .bail()
-    .isFloat({ min: -90, max: 90 })
-    .withMessage("La latitud no es válida")
-    .toFloat(),
-  check("lng", "La longitud es obligatoria")
-    .exists({ checkNull: true })
-    .bail()
-    .isFloat({ min: -180, max: 180 })
-    .withMessage("La longitud no es válida")
-    .toFloat(),
-  validarCampos,
-];
 
 const createPublicacionValidator = [
   check("tipo", "El tipo es obligatorio").isIn(TIPOS),
@@ -356,7 +319,6 @@ const corregirTipoPublicacionValidator = [
 
 module.exports = {
   publicacionIdValidator,
-  ubicacionManualValidator,
   createPublicacionValidator,
   estadoPublicacionValidator,
   updatePublicacionValidator,
