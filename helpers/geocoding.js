@@ -17,6 +17,11 @@ const TIPOS_IMPRECISOS = new Set(["administrative", "state", "county", "country"
 const esResultadoImpreciso = ({ clase, tipo }) =>
   CLASES_IMPRECISAS.has(clase) || TIPOS_IMPRECISOS.has(tipo);
 
+// Se usa el mismo código si la dirección no existe o si Nominatim no responde: en
+// ambos casos el cliente tiene que ofrecer la alternativa (GPS o pin en el mapa) y
+// reenviar la publicación con lat/lng.
+const CODIGO_UBICACION_NO_RESUELTA = "UBICACION_NO_RESUELTA";
+
 // Nominatim exige un User-Agent identificable con datos de contacto de la app.
 const construirUserAgent = () =>
   `PerdidosYAdopcionesBackend/1.0 (${process.env.FRONTEND_URL || "sin-contacto-configurado"})`;
@@ -38,17 +43,32 @@ const geocodificarDireccion = async ({ direccion, contexto }) => {
       headers: { "User-Agent": construirUserAgent() },
     });
   } catch (error) {
-    throw new AppError("No se pudo conectar con el servicio de geocoding", 502);
+    throw new AppError(
+      "No se pudo conectar con el servicio de geocoding",
+      502,
+      null,
+      CODIGO_UBICACION_NO_RESUELTA,
+    );
   }
 
   if (!response.ok) {
-    throw new AppError("El servicio de geocoding respondió con un error", 502);
+    throw new AppError(
+      "El servicio de geocoding respondió con un error",
+      502,
+      null,
+      CODIGO_UBICACION_NO_RESUELTA,
+    );
   }
 
   const resultados = await response.json();
 
   if (!Array.isArray(resultados) || resultados.length === 0) {
-    throw new AppError("No se pudo encontrar la ubicación para la dirección indicada", 422);
+    throw new AppError(
+      "No se pudo encontrar la ubicación para la dirección indicada",
+      422,
+      null,
+      CODIGO_UBICACION_NO_RESUELTA,
+    );
   }
 
   const [mejorResultado] = resultados;
@@ -61,4 +81,4 @@ const geocodificarDireccion = async ({ direccion, contexto }) => {
   };
 };
 
-module.exports = { geocodificarDireccion, esResultadoImpreciso };
+module.exports = { CODIGO_UBICACION_NO_RESUELTA, geocodificarDireccion, esResultadoImpreciso };

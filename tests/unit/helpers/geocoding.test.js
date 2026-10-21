@@ -1,5 +1,9 @@
 const AppError = require("../../../helpers/AppError");
-const { geocodificarDireccion, esResultadoImpreciso } = require("../../../helpers/geocoding");
+const {
+  CODIGO_UBICACION_NO_RESUELTA,
+  geocodificarDireccion,
+  esResultadoImpreciso,
+} = require("../../../helpers/geocoding");
 
 describe("helpers/geocoding", () => {
   const originalFetch = global.fetch;
@@ -42,6 +46,7 @@ describe("helpers/geocoding", () => {
 
       expect(err).toBeInstanceOf(AppError);
       expect(err.statusCode).toBe(422);
+      expect(err.codigo).toBe(CODIGO_UBICACION_NO_RESUELTA);
     });
 
     test("lanza AppError 502 si la respuesta HTTP no es ok", async () => {
@@ -51,6 +56,7 @@ describe("helpers/geocoding", () => {
 
       expect(err).toBeInstanceOf(AppError);
       expect(err.statusCode).toBe(502);
+      expect(err.codigo).toBe(CODIGO_UBICACION_NO_RESUELTA);
     });
 
     test("lanza AppError 502 si falla la conexión", async () => {
@@ -60,6 +66,7 @@ describe("helpers/geocoding", () => {
 
       expect(err).toBeInstanceOf(AppError);
       expect(err.statusCode).toBe(502);
+      expect(err.codigo).toBe(CODIGO_UBICACION_NO_RESUELTA);
     });
   });
 
