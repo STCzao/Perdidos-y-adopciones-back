@@ -24,6 +24,17 @@ describe("AppError", () => {
     expect(err.errors).toEqual(errors);
   });
 
+  test("asigna codigo cuando se proporciona", () => {
+    const err = new AppError("No encontrada", 422, null, "UBICACION_NO_RESUELTA");
+    expect(err.codigo).toBe("UBICACION_NO_RESUELTA");
+    expect(err.errors).toBeUndefined();
+  });
+
+  test("NO asigna codigo cuando no se proporciona", () => {
+    const err = new AppError("Error", 500);
+    expect(err.codigo).toBeUndefined();
+  });
+
   test("tiene stack trace", () => {
     const err = new AppError("Error", 500);
     expect(err.stack).toBeDefined();

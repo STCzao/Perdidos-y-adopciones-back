@@ -51,6 +51,21 @@ describe("errorHandler", () => {
     expect(res.json.mock.calls[0][0].errors).toBeUndefined();
   });
 
+  test("incluye codigo en la respuesta cuando AppError tiene codigo", () => {
+    const err = new AppError("No encontrada", 422, null, "UBICACION_NO_RESUELTA");
+    const res = mockRes();
+    errorHandler(err, mockReq(), res, jest.fn());
+    expect(res.status).toHaveBeenCalledWith(422);
+    expect(res.json.mock.calls[0][0].codigo).toBe("UBICACION_NO_RESUELTA");
+  });
+
+  test("NO incluye codigo en la respuesta cuando AppError no tiene codigo", () => {
+    const err = new AppError("Error simple", 400);
+    const res = mockRes();
+    errorHandler(err, mockReq(), res, jest.fn());
+    expect(res.json.mock.calls[0][0].codigo).toBeUndefined();
+  });
+
   test("maneja Mongoose ValidationError → 400 con campos mapeados", () => {
     const err = {
       name: "ValidationError",
