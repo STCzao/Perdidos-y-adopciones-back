@@ -1,9 +1,16 @@
 const authService = require("../service/auth");
 
+// En desarrollo local (http://localhost) Safari descarta las cookies con
+// `Secure`, a diferencia de Chrome/Firefox que tratan localhost como contexto
+// seguro. Front (localhost:5173) y back (localhost:3000) son el mismo "site",
+// asi que `Lax` sin `Secure` alcanza. En cualquier otro entorno se mantiene
+// `Secure` + `SameSite=None`.
+const isLocalDevelopment = () => process.env.NODE_ENV === "development";
+
 const buildRefreshCookieOptions = () => ({
   httpOnly: true,
-  secure: true,
-  sameSite: "none",
+  secure: !isLocalDevelopment(),
+  sameSite: isLocalDevelopment() ? "lax" : "none",
   maxAge: 30 * 24 * 60 * 60 * 1000,
   path: "/api/auth/refresh",
   ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
