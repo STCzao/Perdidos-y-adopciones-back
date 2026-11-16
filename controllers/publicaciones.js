@@ -9,6 +9,15 @@ const publicacionesGet = async (req, res, next) => {
   }
 };
 
+const publicacionesEstadisticasGet = async (req, res, next) => {
+  try {
+    const result = await publicacionService.getEstadisticas();
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const publicacionesUsuarioGet = async (req, res, next) => {
   try {
     const result = await publicacionService.getPublicacionesUsuario({
@@ -174,6 +183,7 @@ module.exports = {
   publicacionesPut,
   publicacionesCorregirTipoPost,
   publicacionesEstadoPut,
+  publicacionesEstadisticasGet,
   publicacionesDelete,
   obtenerContactoPublicacion,
   obtenerUbicacionExactaPublicacion,

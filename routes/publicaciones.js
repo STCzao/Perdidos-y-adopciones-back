@@ -8,6 +8,7 @@ const {
   publicacionesPut,
   publicacionesCorregirTipoPost,
   publicacionesEstadoPut,
+  publicacionesEstadisticasGet,
   publicacionesDelete,
   obtenerContactoPublicacion,
   obtenerUbicacionExactaPublicacion,
@@ -30,6 +31,8 @@ const {
 const router = Router();
 
 router.get("/", publicacionesGet);
+
+router.get("/estadisticas", publicacionesEstadisticasGet);
 
 router.get("/razas", (req, res) =>
   res.json({ success: true, razas: RAZAS, razasPorEspecie: RAZAS_POR_ESPECIE }),

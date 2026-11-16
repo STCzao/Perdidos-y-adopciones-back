@@ -81,6 +81,14 @@ const findClustersHuerfanos = async ({ telefono, skip = 0, limit = 20 } = {}) =>
   return { clusters: data, total: totalCount[0]?.count || 0 };
 };
 
+const contarPorTipoYEstado = async (filter = {}) => {
+  const grupos = await Publicacion.aggregate([
+    { $match: filter },
+    { $group: { _id: { tipo: "$tipo", estado: "$estado" }, cantidad: { $sum: 1 } } },
+  ]);
+  return grupos.map(({ _id, cantidad }) => ({ tipo: _id.tipo, estado: _id.estado, cantidad }));
+};
+
 const findByUsuarioId = (usuarioViejoId) =>
   Publicacion.find({ usuario: usuarioViejoId })
     .select("tipo especie nombreanimal localidad fecha whatsapp fechaCreacion")
@@ -97,5 +105,6 @@ module.exports = {
   findByIdAndUpdate,
   findByIdAndDelete,
   findClustersHuerfanos,
+  contarPorTipoYEstado,
   findByUsuarioId,
 };

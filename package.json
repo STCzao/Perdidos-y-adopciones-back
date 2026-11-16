@@ -12,7 +12,8 @@
     "test:unit": "jest tests/unit --coverage",
     "test:integration": "jest tests/integration --runInBand",
     "test:e2e": "jest tests/e2e --runInBand",
-    "test:coverage": "jest --coverage --runInBand"
+    "test:coverage": "jest --coverage --runInBand",
+    "db:dev": "node scripts/dev-db.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

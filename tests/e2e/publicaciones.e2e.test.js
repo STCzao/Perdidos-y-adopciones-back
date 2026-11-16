@@ -11,6 +11,7 @@ const request = require("supertest");
 const db = require("../setup/db");
 const createApp = require("../setup/testApp");
 const { createUser, createAdmin, createPublicacion } = require("../setup/factories");
+const Publicacion = require("../../models/publicacion");
 
 let app;
 
@@ -93,6 +94,116 @@ describe("E2E: /api/publicaciones", () => {
       expect(res.status).toBe(200);
       expect(res.body.razas).toBeDefined();
       expect(Array.isArray(res.body.razas)).toBe(true);
+    });
+  });
+
+  // ─── GET /estadisticas ────────────────────────────────────────────────────────
+  describe("GET /api/publicaciones/estadisticas", () => {
+    const ADOPCION_EXTRA = {
+      tipo: "ADOPCION",
+      afinidad: "ALTA",
+      afinidadanimales: "MEDIA",
+      energia: "BAJA",
+      castrado: true,
+    };
+
+    test("200 separa activos y resueltos por tipo, sin autenticación", async () => {
+      const user = await createUser();
+      await createPublicacion(user._id, { tipo: "PERDIDO", estado: "SE BUSCA" });
+      await createPublicacion(user._id, { tipo: "PERDIDO", estado: "SE BUSCA" });
+      await createPublicacion(user._id, { tipo: "PERDIDO", estado: "YA APARECIO" });
+      await createPublicacion(user._id, { tipo: "ENCONTRADO", estado: "BUSCANDO A SU FAMILIA" });
+      await createPublicacion(user._id, { tipo: "ENCONTRADO", estado: "APARECIO SU FAMILIA" });
+      await createPublicacion(user._id, { tipo: "ENCONTRADO", estado: "TIENE NUEVA FAMILIA" });
+      await createPublicacion(user._id, { ...ADOPCION_EXTRA, estado: "ADOPTADO" });
+
+      const res = await request(app).get("/api/publicaciones/estadisticas");
+
+      expect(res.status).toBe(200);
+      expect(res.body.estadisticas).toEqual({
+        PERDIDO: { total: 3, activos: 2, resueltos: 1 },
+        ENCONTRADO: { total: 3, activos: 1, resueltos: 2 },
+        ADOPCION: { total: 1, activos: 0, resueltos: 1 },
+      });
+    });
+
+    test("no cuenta publicaciones INACTIVO ni estados que no corresponden al tipo", async () => {
+      const user = await createUser();
+      await createPublicacion(user._id, { tipo: "PERDIDO", estado: "INACTIVO" });
+      await createPublicacion(user._id, { tipo: "PERDIDO", estado: "ADOPTADO" });
+      await createPublicacion(user._id, { tipo: "PERDIDO", estado: "SE BUSCA" });
+
+      const res = await request(app).get("/api/publicaciones/estadisticas");
+
+      expect(res.status).toBe(200);
+      expect(res.body.estadisticas.PERDIDO).toEqual({ total: 1, activos: 1, resueltos: 0 });
+      expect(res.body.estadisticas.ADOPCION).toEqual({ total: 0, activos: 0, resueltos: 0 });
+    });
+  });
+
+  // ─── PUT /:id/estado ──────────────────────────────────────────────────────────
+  describe("PUT /api/publicaciones/:id/estado", () => {
+    test("200 acepta un estado propio del tipo", async () => {
+      const owner = await createUser({ correo: "estado-ok@test.com", rawPassword: "password123" });
+      const pub = await createPublicacion(owner._id, { tipo: "PERDIDO", estado: "SE BUSCA" });
+      const token = await loginAs("estado-ok@test.com");
+
+      const res = await request(app)
+        .put(`/api/publicaciones/${pub._id}/estado`)
+        .set("x-token", token)
+        .send({ estado: "YA APARECIO" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.publicacion.estado).toBe("YA APARECIO");
+    });
+
+    test("400 rechaza un estado de otro tipo y no modifica la publicación", async () => {
+      const owner = await createUser({ correo: "estado-mal@test.com", rawPassword: "password123" });
+      const pub = await createPublicacion(owner._id, { tipo: "PERDIDO", estado: "SE BUSCA" });
+      const token = await loginAs("estado-mal@test.com");
+
+      const res = await request(app)
+        .put(`/api/publicaciones/${pub._id}/estado`)
+        .set("x-token", token)
+        .send({ estado: "ADOPTADO" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.msg).toMatch(/no corresponde/i);
+      const enDb = await Publicacion.findById(pub._id);
+      expect(enDb.estado).toBe("SE BUSCA");
+    });
+
+    test("400 también para un admin", async () => {
+      await createAdmin({ correo: "admin-estado@test.com", rawPassword: "password123" });
+      const user = await createUser();
+      const pub = await createPublicacion(user._id, {
+        tipo: "ENCONTRADO",
+        estado: "BUSCANDO A SU FAMILIA",
+      });
+      const token = await loginAs("admin-estado@test.com");
+
+      const res = await request(app)
+        .put(`/api/publicaciones/${pub._id}/estado`)
+        .set("x-token", token)
+        .send({ estado: "YA APARECIO" });
+
+      expect(res.status).toBe(400);
+    });
+
+    test("200 permite pasar a INACTIVO desde cualquier tipo", async () => {
+      const owner = await createUser({ correo: "estado-baja@test.com", rawPassword: "password123" });
+      const pub = await createPublicacion(owner._id, {
+        tipo: "ENCONTRADO",
+        estado: "BUSCANDO A SU FAMILIA",
+      });
+      const token = await loginAs("estado-baja@test.com");
+
+      const res = await request(app)
+        .put(`/api/publicaciones/${pub._id}/estado`)
+        .set("x-token", token)
+        .send({ estado: "INACTIVO" });
+
+      expect(res.status).toBe(200);
     });
   });
 
