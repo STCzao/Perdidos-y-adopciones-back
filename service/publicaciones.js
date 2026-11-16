@@ -26,6 +26,21 @@ const ESTADO_DEFECTO = {
   ENCONTRADO: "BUSCANDO A SU FAMILIA",
   ADOPCION: "EN BUSCA DE UN HOGAR",
 };
+// Estados que puede tomar cada tipo. El primero de `abiertos` coincide con
+// ESTADO_DEFECTO; `resueltos` son los que cierran el caso con un final feliz.
+const ESTADOS_POR_TIPO = {
+  PERDIDO: { abiertos: ["SE BUSCA"], resueltos: ["YA APARECIO"] },
+  ENCONTRADO: {
+    abiertos: ["BUSCANDO A SU FAMILIA"],
+    resueltos: ["APARECIO SU FAMILIA", "TIENE NUEVA FAMILIA"],
+  },
+  ADOPCION: { abiertos: ["EN BUSCA DE UN HOGAR"], resueltos: ["ADOPTADO"] },
+};
+const esEstadoValidoParaTipo = (tipo, estado) => {
+  const config = ESTADOS_POR_TIPO[tipo];
+  if (!config) return false;
+  return estado === "INACTIVO" || config.abiertos.includes(estado) || config.resueltos.includes(estado);
+};
 const TIPOS_CON_UBICACION = new Set(["PERDIDO", "ENCONTRADO"]);
 const CAMPOS_COMPARTIDOS = [
   "nombreanimal",
@@ -450,15 +465,23 @@ const cambiarEstadoPublicacion = async ({ id, estado, usuarioActual, correo, ip 
     throw new AppError("No tiene permisos para cambiar el estado de esta publicacion", 403);
   }
 
+  const estadoNormalizado = normalizarTexto(estado);
+  if (!esEstadoValidoParaTipo(publicacion.tipo, estadoNormalizado)) {
+    throw new AppError(
+      `El estado ${estadoNormalizado} no corresponde a una publicacion de tipo ${publicacion.tipo}`,
+      400,
+    );
+  }
+
   const publicacionActualizada = await publicacionesRepository.findByIdAndUpdate(
     id,
-    { estado: normalizarTexto(estado) },
+    { estado: estadoNormalizado },
     { new: true, populate: { path: "usuario", select: "nombre" } },
   );
 
   logger.info("Estado de publicacion actualizado", {
     publicacionId: id,
-    nuevoEstado: normalizarTexto(estado),
+    nuevoEstado: estadoNormalizado,
     usuario: correo,
     ip,
   });
@@ -733,7 +756,28 @@ const exportarPublicaciones = async ({ estado, tipo, search, raza, localidad }) 
   return workbook.xlsx.writeBuffer();
 };
 
+// Conteos públicos por tipo, separando casos abiertos de resueltos.
+// Las INACTIVO no cuentan (bajas y publicaciones reemplazadas por corrección de tipo).
+const getEstadisticas = async () => {
+  const conteos = await publicacionesRepository.contarPorTipoYEstado({ estado: { $ne: "INACTIVO" } });
+
+  const estadisticas = {};
+  for (const [tipo, { abiertos, resueltos }] of Object.entries(ESTADOS_POR_TIPO)) {
+    estadisticas[tipo] = { total: 0, activos: 0, resueltos: 0 };
+    for (const { tipo: t, estado, cantidad } of conteos) {
+      if (t !== tipo) continue;
+      if (abiertos.includes(estado)) estadisticas[tipo].activos += cantidad;
+      else if (resueltos.includes(estado)) estadisticas[tipo].resueltos += cantidad;
+      else continue; // estado que no corresponde al tipo (datos legacy): no se cuenta
+      estadisticas[tipo].total += cantidad;
+    }
+  }
+
+  return { estadisticas };
+};
+
 module.exports = {
+  getEstadisticas,
   getPublicaciones,
   getPublicacionesUsuario,
   getPublicacion,
